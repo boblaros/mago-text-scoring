@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Text Analysis Router · Prototype</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@600;700;800&display=swap');
+
+  :root {
+    --bg: #080c14;
+    --surface: #0d1526;
+    --surface2: #0a1020;
+    --border: #1e2d4a;
+    --blue: #4f8eff;
+    --blue-dim: #1e3a6e;
+    --text: #f0f4ff;
+    --muted: #475569;
+    --yellow: #f59e0b;
+    --purple: #a855f7;
+    --green: #22c55e;
+    --orange: #f97316;
+    --red: #ef4444;
+    --teal: #10b981;
+    --skyblue: #3b82f6;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: 'Syne', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 20px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  .wrap { width: 100%; max-width: 920px; position: relative; z-index: 1; }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 36px;
+  }
+  h1 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 span { color: var(--blue); }
+  .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    border: 1px solid #1e293b;
+    border-radius: 4px;
+    padding: 2px 7px;
+    text-transform: uppercase;
+  }
+
+  /* INPUT PANEL */
+  .input-panel {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+  .panel-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--blue);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    color: #7dd3fc;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13.5px;
+    line-height: 1.7;
+    padding: 14px 16px;
+    resize: vertical;
+    min-height: 90px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--blue); }
+  textarea::placeholder { color: #2a3a5c; }
+
+  .examples-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .ex-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #64748b;
+    background: var(--surface2);
+    border: 1px solid #1e293b;
+    border-radius: 20px;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .ex-btn:hover { color: var(--text); border-color: var(--muted); }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .run-btn {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #080c14;
+    background: var(--blue);
+    border: none;
+    border-radius: 8px;
+    padding: 11px 28px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .run-btn:hover { background: #6fa3ff; transform: translateY(-1px); box-shadow: 0 4px 20px rgba(79,142,255,0.35); }
+  .run-btn:active { transform: translateY(0); }
+  .run-btn.loading { pointer-events: none; opacity: 0.7; }
+  .clear-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid #1e293b;
+    border-radius: 8px;
+    padding: 11px 20px;
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .clear-btn:hover { color: var(--text); border-color: var(--muted); }
+
+  /* PIPELINE */
+  .pipeline { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+  /* ROUTER NODE */
+  .router-node {
+    background: var(--surface);
+    border: 2px solid var(--blue);
+    border-radius: 14px;
+    padding: 16px 32px;
+    text-align: center;
+    width: 440px;
+    box-shadow: 0 0 40px rgba(79,142,255,0.12);
+    transition: box-shadow 0.3s;
+    position: relative;
+  }
+  .router-node.active { box-shadow: 0 0 60px rgba(79,142,255,0.3); }
+  .router-node-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--blue);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .detected-domain {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    min-height: 16px;
+    transition: color 0.3s;
+  }
+  .detected-domain.set { color: #7dd3fc; }
+
+  .conn {
+    width: 2px;
+    height: 28px;
+    background: linear-gradient(to bottom, #1e3a6e, #4f8eff44);
+    flex-shrink: 0;
+  }
+
+  /* DOMAIN COLUMNS */
+  .domains-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    width: 100%;
+    padding-top: 8px;
+  }
+
+  .domain-col {
+    border-radius: 12px;
+    padding: 16px;
+    border: 1.5px solid;
+    opacity: 0.35;
+    transition: opacity 0.4s, box-shadow 0.4s;
+    position: relative;
+  }
+  .domain-col.active {
+    opacity: 1;
+    box-shadow: 0 0 30px var(--domain-glow);
+  }
+  .domain-col.tweets   { border-color: var(--green);  --domain-glow: rgba(34,197,94,0.18); background: #0a1e12; }
+  .domain-col.dialogues { border-color: var(--purple); --domain-glow: rgba(168,85,247,0.18); background: #110820; }
+  .domain-col.longtexts { border-color: var(--orange); --domain-glow: rgba(249,115,22,0.18); background: #160a04; }
+
+  .col-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .col-icon { font-size: 18px; }
+  .col-name {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .tweets   .col-name { color: var(--green); }
+  .dialogues .col-name { color: var(--purple); }
+  .longtexts .col-name { color: var(--orange); }
+  .col-rule {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: #475569;
+    margin-bottom: 12px;
+  }
+
+  /* MODEL ROWS */
+  .model-row {
+    border-radius: 7px;
+    padding: 9px 12px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1.5px solid;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .model-row-left { display: flex; align-items: center; gap: 8px; }
+  .mdot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .mname {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .mresult {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    opacity: 0;
+    transition: opacity 0.4s;
+    text-align: right;
+    max-width: 100px;
+  }
+  .model-row.done .mresult { opacity: 1; }
+
+  /* loading shimmer */
+  .model-row.running::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+    animation: shimmer 1s infinite;
+  }
+  @keyframes shimmer {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* color variants */
+  .row-sentiment { background: #110e00; border-color: #78350f; }
+  .row-sentiment .mdot { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+  .row-sentiment .mname { color: #fcd34d; }
+  .row-sentiment .mresult { color: #fcd34d; }
+
+  .row-complexity { background: #060f20; border-color: #1e3a6e; }
+  .row-complexity .mdot { background: var(--skyblue); box-shadow: 0 0 6px var(--skyblue); }
+  .row-complexity .mname { color: #93c5fd; }
+  .row-complexity .mresult { color: #93c5fd; }
+
+  .row-age { background: #03100a; border-color: #064e3b; }
+  .row-age .mdot { background: var(--teal); box-shadow: 0 0 6px var(--teal); }
+  .row-age .mname { color: #6ee7b7; }
+  .row-age .mresult { color: #6ee7b7; }
+
+  .row-abuse { background: #130404; border-color: #7f1d1d; }
+  .row-abuse .mdot { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .row-abuse .mname { color: #fca5a5; }
+  .row-abuse .mresult { color: #fca5a5; }
+
+  /* AGGREGATOR */
+  .aggregator {
+    background: var(--surface);
+    border: 2px solid #334155;
+    border-radius: 14px;
+    padding: 22px 28px;
+    width: 100%;
+    box-shadow: 0 0 40px rgba(226,232,240,0.04);
+    transition: border-color 0.4s, box-shadow 0.4s;
+  }
+  .aggregator.done {
+    border-color: #475569;
+    box-shadow: 0 0 40px rgba(226,232,240,0.09);
+  }
+  .agg-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .results-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .result-card {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    transition: border-color 0.4s, opacity 0.4s;
+    opacity: 0.3;
+  }
+  .result-card.done {
+    opacity: 1;
+    animation: fadeSlideIn 0.4s ease forwards;
+  }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .rc-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .rc-label::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--dot-color, var(--muted));
+    box-shadow: 0 0 5px var(--dot-color, transparent);
+  }
+  .rc-value {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  .rc-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .rc-bar {
+    margin-top: 8px;
+    height: 3px;
+    background: #1e293b;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .rc-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--bar-color, var(--muted));
+    transition: width 1s ease;
+    width: 0%;
+  }
+
+  /* sentiment card */
+  .rc-sentiment .rc-label { --dot-color: var(--yellow); }
+  .rc-sentiment .rc-value { color: #fcd34d; }
+  .rc-sentiment .rc-bar-fill { background: var(--yellow); }
+
+  .rc-complexity .rc-label { --dot-color: var(--skyblue); }
+  .rc-complexity .rc-value { color: #93c5fd; }
+  .rc-complexity .rc-bar-fill { background: var(--skyblue); }
+
+  .rc-age .rc-label { --dot-color: var(--teal); }
+  .rc-age .rc-value { color: #6ee7b7; }
+  .rc-age .rc-bar-fill { background: var(--teal); }
+
+  .rc-abuse .rc-label { --dot-color: var(--red); }
+  .rc-abuse .rc-value { color: #fca5a5; }
+  .rc-abuse .rc-bar-fill { background: var(--red); }
+
+  /* log */
+  .log-panel {
+    margin-top: 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: #334155;
+    line-height: 1.8;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+  .log-line { color: #334155; }
+  .log-line.info { color: #3b82f6; }
+  .log-line.ok   { color: #10b981; }
+  .log-line.warn { color: #f59e0b; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Text Analysis <span>Router</span></h1>
+    <span class="badge">Prototype v0.1</span>
+  </header>
+
+  <!-- INPUT -->
+  <div class="input-panel">
+    <div class="panel-label">▸ Incoming Text</div>
+    <textarea id="inputText" placeholder='Enter any text... e.g. "I hate this movie so much!!!"'>"I hate this movie so much!!!"</textarea>
+
+    <div class="examples-row">
+      <button class="ex-btn" data-example="tweet" onclick="loadExample(this)">🐦 tweet example</button>
+      <button class="ex-btn" data-example="dialogue" onclick="loadExample(this)">💬 dialogue example</button>
+      <button class="ex-btn" data-example="longtext" onclick="loadExample(this)">📄 long text example</button>
+    </div>
+
+    <div class="actions">
+      <button class="run-btn" id="runBtn" onclick="runAnalysis()">▶ Analyze</button>
+      <button class="clear-btn" onclick="resetAll()">Reset</button>
+      <span id="statusText" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#334155;margin-left:8px;"></span>
+    </div>
+  </div>
+
+  <!-- PIPELINE -->
+  <div class="pipeline">
+
+    <!-- ROUTER -->
+    <div class="router-node" id="routerNode">
+      <div class="router-node-title">🔀 Domain Router</div>
+      <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#3b5a8a;background:#0d2348;border:1px solid #1e3a6e;border-radius:20px;padding:2px 9px;">text length</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#3b5a8a;background:#0d2348;border:1px solid #1e3a6e;border-radius:20px;padding:2px 9px;"># @ emojis</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#3b5a8a;background:#0d2348;border:1px solid #1e3a6e;border-radius:20px;padding:2px 9px;">"name:" pattern</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#3b5a8a;background:#0d2348;border:1px solid #1e3a6e;border-radius:20px;padding:2px 9px;">50+ words</span>
+      </div>
+      <div class="detected-domain" id="detectedDomain">awaiting input…</div>
+    </div>
+
+    <div class="conn"></div>
+
+    <!-- DOMAINS -->
+    <div class="domains-grid" id="domainsGrid">
+
+      <div class="domain-col tweets" id="col-tweets">
+        <div class="col-header">
+          <span class="col-icon">🐦</span>
+          <span class="col-name">Tweets</span>
+        </div>
+        <div class="col-rule">≤50 words · # @ emojis</div>
+        <div class="model-row row-sentiment" id="m-tweets-sentiment">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">sentiment_tweets</div></div>
+          <div class="mresult" id="r-tweets-sentiment"></div>
+        </div>
+        <div class="model-row row-complexity" id="m-tweets-complexity">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">complexity_tweets</div></div>
+          <div class="mresult" id="r-tweets-complexity"></div>
+        </div>
+        <div class="model-row row-age" id="m-tweets-age">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">age_tweets</div></div>
+          <div class="mresult" id="r-tweets-age"></div>
+        </div>
+        <div class="model-row row-abuse" id="m-tweets-abuse">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">abuse_tweets</div></div>
+          <div class="mresult" id="r-tweets-abuse"></div>
+        </div>
+      </div>
+
+      <div class="domain-col dialogues" id="col-dialogues">
+        <div class="col-header">
+          <span class="col-icon">💬</span>
+          <span class="col-name">Dialogues</span>
+        </div>
+        <div class="col-rule">"name:" pattern · turn-based</div>
+        <div class="model-row row-sentiment" id="m-dialogues-sentiment">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">sentiment_dialogue</div></div>
+          <div class="mresult" id="r-dialogues-sentiment"></div>
+        </div>
+        <div class="model-row row-complexity" id="m-dialogues-complexity">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">complexity_dialogue</div></div>
+          <div class="mresult" id="r-dialogues-complexity"></div>
+        </div>
+        <div class="model-row row-age" id="m-dialogues-age">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">age_dialogue</div></div>
+          <div class="mresult" id="r-dialogues-age"></div>
+        </div>
+        <div class="model-row row-abuse" id="m-dialogues-abuse">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">abuse_dialogue</div></div>
+          <div class="mresult" id="r-dialogues-abuse"></div>
+        </div>
+      </div>
+
+      <div class="domain-col longtexts" id="col-longtexts">
+        <div class="col-header">
+          <span class="col-icon">📄</span>
+          <span class="col-name">Long Texts</span>
+        </div>
+        <div class="col-rule">50+ words · formal style</div>
+        <div class="model-row row-sentiment" id="m-longtexts-sentiment">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">sentiment_long</div></div>
+          <div class="mresult" id="r-longtexts-sentiment"></div>
+        </div>
+        <div class="model-row row-complexity" id="m-longtexts-complexity">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">complexity_long</div></div>
+          <div class="mresult" id="r-longtexts-complexity"></div>
+        </div>
+        <div class="model-row row-age" id="m-longtexts-age">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">age_long</div></div>
+          <div class="mresult" id="r-longtexts-age"></div>
+        </div>
+        <div class="model-row row-abuse" id="m-longtexts-abuse">
+          <div class="model-row-left"><div class="mdot"></div><div class="mname">abuse_long</div></div>
+          <div class="mresult" id="r-longtexts-abuse"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="conn"></div>
+
+    <!-- AGGREGATOR -->
+    <div class="aggregator" id="aggregator">
+      <div class="agg-title">📦 Aggregator <span style="color:#334155;font-size:10px;font-family:'JetBrains Mono',monospace">· /analyze</span></div>
+      <div class="results-grid">
+        <div class="result-card rc-sentiment" id="rc-sentiment">
+          <div class="rc-label">Sentiment</div>
+          <div class="rc-value" id="rv-sentiment">—</div>
+          <div class="rc-sub" id="rs-sentiment">score: —</div>
+          <div class="rc-bar"><div class="rc-bar-fill" id="rb-sentiment"></div></div>
+        </div>
+        <div class="result-card rc-complexity" id="rc-complexity">
+          <div class="rc-label">Complexity</div>
+          <div class="rc-value" id="rv-complexity">—</div>
+          <div class="rc-sub" id="rs-complexity">level: —</div>
+          <div class="rc-bar"><div class="rc-bar-fill" id="rb-complexity"></div></div>
+        </div>
+        <div class="result-card rc-age" id="rc-age">
+          <div class="rc-label">Age Range</div>
+          <div class="rc-value" id="rv-age">—</div>
+          <div class="rc-sub" id="rs-age">confidence: —</div>
+          <div class="rc-bar"><div class="rc-bar-fill" id="rb-age"></div></div>
+        </div>
+        <div class="result-card rc-abuse" id="rc-abuse">
+          <div class="rc-label">Abuse</div>
+          <div class="rc-value" id="rv-abuse">—</div>
+          <div class="rc-sub" id="rs-abuse">score: —</div>
+          <div class="rc-bar"><div class="rc-bar-fill" id="rb-abuse"></div></div>
+        </div>
+      </div>
+      <div class="log-panel" id="logPanel">
+        <div class="log-line">// pipeline log</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── EXAMPLES ──────────────────────────────────────────────────────────────────
+const EXAMPLES = {
+  tweet:    `omg this new album just dropped and i'm OBSESSED 🎵🔥 #music #vibes @spotifyuk`,
+  dialogue: `Alice: Hey, did you see what happened at work today?\nBob: No, what's up?\nAlice: Mike got promoted over Sarah again. It's so unfair.\nBob: That's really frustrating. Have you talked to HR about it?`,
+  longtext: `The recent advancements in artificial intelligence have prompted significant discussion among academics, policymakers, and industry leaders regarding the ethical implications of deploying large-scale language models. While these systems demonstrate remarkable capabilities in natural language understanding and generation, concerns persist about bias, transparency, and the potential for misuse in sensitive domains such as healthcare and legal decision-making.`
+};
+
+function loadExample(btn) {
+  document.getElementById('inputText').value = EXAMPLES[btn.dataset.example];
+}
+
+// ── ROUTER LOGIC ──────────────────────────────────────────────────────────────
+function routeText(text) {
+  const words = text.trim().split(/\s+/).length;
+  const hasHashAt = /#\w|@\w/.test(text);
+  const hasEmoji = /[\u{1F300}-\u{1FFFF}]|[\u{2600}-\u{26FF}]/u.test(text);
+  const hasDialoguePattern = /\b\w+:\s/.test(text) && text.includes('\n');
+
+  if (hasDialoguePattern) return 'dialogues';
+  if (words <= 50 && (hasHashAt || hasEmoji || words <= 20)) return 'tweets';
+  return 'longtexts';
+}
+
+// ── STUB ANALYZERS ─────────────────────────────────────────────────────────────
+function analyzeSentiment(text, domain) {
+  const negative = /hate|awful|terrible|bad|worst|disappoint|angry|sad|ugh|omg.*bad/i.test(text);
+  const positive = /love|great|amazing|obsessed|awesome|wonderful|excellent|happy|good/i.test(text);
+  if (negative) return { label: 'negative', score: +(0.80 + Math.random()*0.18).toFixed(2) };
+  if (positive) return { label: 'positive', score: +(0.75 + Math.random()*0.22).toFixed(2) };
+  return { label: 'neutral', score: +(0.45 + Math.random()*0.25).toFixed(2) };
+}
+
+function analyzeComplexity(text, domain) {
+  const words = text.trim().split(/\s+/).length;
+  const avgWordLen = text.replace(/\s+/g,' ').split(' ').reduce((s,w)=>s+w.length,0) / words;
+  if (domain === 'tweets' || avgWordLen < 5)    return { label: 'simple',      level: 'A2-B1' };
+  if (domain === 'dialogues' || avgWordLen < 6) return { label: 'conversational', level: 'B1-B2' };
+  return { label: 'complex', level: 'C1-C2' };
+}
+
+function analyzeAge(text, domain) {
+  const teen = /omg|lol|idk|tbh|ngl|fam|bestie|lowkey|slay|drip/i.test(text);
+  const formal = /\b(regarding|moreover|consequently|therefore|pursuant)\b/i.test(text);
+  if (teen) return { range: '13-17', conf: +(0.65 + Math.random()*0.20).toFixed(2) };
+  if (formal) return { range: '30-45', conf: +(0.68 + Math.random()*0.18).toFixed(2) };
+  return { range: '18-29', conf: +(0.55 + Math.random()*0.30).toFixed(2) };
+}
+
+function analyzeAbuse(text, domain) {
+  const strong = /\b(hate|kill|die|stupid|idiot|moron)\b/i.test(text);
+  const mild = /\b(awful|terrible|worst|annoying)\b/i.test(text);
+  if (strong) return { label: 'abusive',    score: +(0.72 + Math.random()*0.25).toFixed(2) };
+  if (mild)   return { label: 'borderline', score: +(0.38 + Math.random()*0.30).toFixed(2) };
+  return { label: 'clean', score: +(0.04 + Math.random()*0.18).toFixed(2) };
+}
+
+// ── LOG ────────────────────────────────────────────────────────────────────────
+function log(msg, type = '') {
+  const panel = document.getElementById('logPanel');
+  const line = document.createElement('div');
+  line.className = `log-line ${type}`;
+  const ts = new Date().toISOString().split('T')[1].slice(0,12);
+  line.textContent = `[${ts}] ${msg}`;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── RESET ─────────────────────────────────────────────────────────────────────
+function resetAll() {
+  document.getElementById('detectedDomain').className = 'detected-domain';
+  document.getElementById('detectedDomain').textContent = 'awaiting input…';
+  document.getElementById('routerNode').classList.remove('active');
+  document.getElementById('aggregator').classList.remove('done');
+  ['tweets','dialogues','longtexts'].forEach(d => {
+    document.getElementById(`col-${d}`).classList.remove('active');
+    ['sentiment','complexity','age','abuse'].forEach(m => {
+      const row = document.getElementById(`m-${d}-${m}`);
+      row.classList.remove('running','done');
+      document.getElementById(`r-${d}-${m}`).textContent = '';
+    });
+  });
+  ['sentiment','complexity','age','abuse'].forEach(k => {
+    document.getElementById(`rc-${k}`).classList.remove('done');
+    document.getElementById(`rv-${k}`).textContent = '—';
+    document.getElementById(`rs-${k}`).textContent = k === 'complexity' ? 'level: —' : k === 'age' ? 'confidence: —' : 'score: —';
+    document.getElementById(`rb-${k}`).style.width = '0%';
+  });
+  document.getElementById('logPanel').innerHTML = '<div class="log-line">// pipeline log</div>';
+  document.getElementById('statusText').textContent = '';
+}
+
+// ── MAIN ──────────────────────────────────────────────────────────────────────
+async function runAnalysis() {
+  const text = document.getElementById('inputText').value.trim();
+  if (!text) return;
+
+  resetAll();
+  const btn = document.getElementById('runBtn');
+  btn.classList.add('loading');
+  btn.textContent = '⟳ Running…';
+  document.getElementById('statusText').textContent = '';
+
+  log(`received text (${text.split(/\s+/).length} words)`, 'info');
+  await sleep(300);
+
+  // ROUTE
+  document.getElementById('routerNode').classList.add('active');
+  log('routing…', 'info');
+  await sleep(500);
+
+  const domain = routeText(text);
+  const domainLabel = { tweets: 'tweets 🐦', dialogues: 'dialogues 💬', longtexts: 'long texts 📄' }[domain];
+  const dd = document.getElementById('detectedDomain');
+  dd.textContent = `→ routed to: ${domainLabel}`;
+  dd.classList.add('set');
+  log(`domain detected: ${domain}`, 'ok');
+
+  await sleep(400);
+  document.getElementById(`col-${domain}`).classList.add('active');
+
+  // RUN MODELS
+  const models = ['sentiment','complexity','age','abuse'];
+  const analyzers = { sentiment: analyzeSentiment, complexity: analyzeComplexity, age: analyzeAge, abuse: analyzeAbuse };
+  const results = {};
+
+  for (const model of models) {
+    const rowId = `m-${domain}-${model}`;
+    const row = document.getElementById(rowId);
+    row.classList.add('running');
+    log(`calling ${model}_${domain === 'longtexts' ? 'long' : domain.slice(0,-1)}…`);
+    await sleep(350 + Math.random()*250);
+
+    const res = analyzers[model](text, domain);
+    results[model] = res;
+    row.classList.remove('running');
+    row.classList.add('done');
+
+    const rEl = document.getElementById(`r-${domain}-${model}`);
+    rEl.textContent = model === 'age' ? res.range : res.label;
+    log(`✓ ${model}: ${JSON.stringify(res)}`, 'ok');
+    await sleep(100);
+  }
+
+  // AGGREGATE
+  await sleep(300);
+  log('aggregating results…', 'info');
+  document.getElementById('aggregator').classList.add('done');
+
+  // Sentiment
+  await sleep(200);
+  document.getElementById('rc-sentiment').classList.add('done');
+  document.getElementById('rv-sentiment').textContent = results.sentiment.label;
+  document.getElementById('rs-sentiment').textContent = `score: ${results.sentiment.score}`;
+  document.getElementById('rb-sentiment').style.width = `${results.sentiment.score * 100}%`;
+
+  // Complexity
+  await sleep(200);
+  document.getElementById('rc-complexity').classList.add('done');
+  document.getElementById('rv-complexity').textContent = results.complexity.label;
+  document.getElementById('rs-complexity').textContent = `level: ${results.complexity.level}`;
+  const levMap = { simple: 0.25, conversational: 0.55, complex: 0.9 };
+  document.getElementById('rb-complexity').style.width = `${(levMap[results.complexity.label]||0.5)*100}%`;
+
+  // Age
+  await sleep(200);
+  document.getElementById('rc-age').classList.add('done');
+  document.getElementById('rv-age').textContent = results.age.range;
+  document.getElementById('rs-age').textContent = `confidence: ${results.age.conf}`;
+  document.getElementById('rb-age').style.width = `${results.age.conf * 100}%`;
+
+  // Abuse
+  await sleep(200);
+  document.getElementById('rc-abuse').classList.add('done');
+  document.getElementById('rv-abuse').textContent = results.abuse.label;
+  document.getElementById('rs-abuse').textContent = `score: ${results.abuse.score}`;
+  document.getElementById('rb-abuse').style.width = `${results.abuse.score * 100}%`;
+
+  log('✓ analysis complete', 'ok');
+  document.getElementById('statusText').textContent = '✓ done';
+  btn.classList.remove('loading');
+  btn.textContent = '▶ Analyze';
+}
+</script>
+</body>
+</html>

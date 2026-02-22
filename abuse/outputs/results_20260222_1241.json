@@ -1,0 +1,52 @@
+{
+  "Majority Baseline | test": {
+    "accuracy": 0.41614195764167144,
+    "f1_macro": 0.19590406898410131,
+    "f1_weighted": 0.24457170833103892
+  },
+  "TF-IDF + LogReg | val": {
+    "accuracy": 0.5609616485403549,
+    "f1_macro": 0.5467100602288075,
+    "f1_weighted": 0.5615698149039601
+  },
+  "TF-IDF + LogReg | test": {
+    "accuracy": 0.5666857469948483,
+    "f1_macro": 0.5562442305876908,
+    "f1_weighted": 0.5673826258726723
+  },
+  "TF-IDF + XGBoost | val": {
+    "accuracy": 0.53921007441328,
+    "f1_macro": 0.5060800562863635,
+    "f1_weighted": 0.5285098363154336
+  },
+  "TF-IDF + XGBoost | test": {
+    "accuracy": 0.5569547796222095,
+    "f1_macro": 0.5241236483999642,
+    "f1_weighted": 0.54549900641377
+  },
+  "GloVe MLP | test": {
+    "accuracy": 0.5535203205495135,
+    "f1_macro": 0.5275287803351948,
+    "f1_weighted": 0.5414860087504203
+  },
+  "GloVe CNN | test": {
+    "accuracy": 0.5592444190040069,
+    "f1_macro": 0.5268462978092501,
+    "f1_weighted": 0.5473393588088188
+  },
+  "GloVe BiLSTM | test": {
+    "accuracy": 0.5529479107040641,
+    "f1_macro": 0.5309573370160315,
+    "f1_weighted": 0.5499840212220938
+  },
+  "BERT Fine-tune | val": {
+    "accuracy": 0.6067544361763022,
+    "f1_macro": 0.5907447134135843,
+    "f1_weighted": 0.6060277664735578
+  },
+  "BERT Fine-tune | test": {
+    "accuracy": 0.5861476817401259,
+    "f1_macro": 0.5717185999573592,
+    "f1_weighted": 0.5861578532934918
+  }
+}

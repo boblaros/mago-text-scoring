@@ -1,0 +1,9 @@
+# ignore models and data inside submodules
+*/models/
+*/data/
+
+
+# notebooks junk
+.ipynb_checkpoints/
+__pycache__/
+.DS_Store
