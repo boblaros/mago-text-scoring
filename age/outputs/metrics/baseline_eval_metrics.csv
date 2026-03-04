@@ -1,0 +1,39 @@
+model,split_key,train_size,split,accuracy,f1_macro,f1_weighted,roc_auc,model_tag,model_path,status
+Majority Class,reddit_500k,349111,test,0.20033417992247027,0.06675946857912848,0.06687101694929813,,Majority Class [reddit_500k],models/majority_class_reddit_500k_20260304_150119/best_model/model.pkl,loaded
+Majority Class,reddit_500k,349111,val,0.20033417992247027,0.06675946857912848,0.06687101694929813,,Majority Class [reddit_500k],models/majority_class_reddit_500k_20260304_150119/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_1k,700,test,0.29333333333333333,0.2892874867068415,0.2892874867068415,,TF-IDF + LogReg [reddit_1k],models/tf_idf_logreg_reddit_1k_20260302_144254/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_5k,3499,test,0.32666666666666666,0.32802342205208807,0.32802342205208807,,TF-IDF + LogReg [reddit_5k],models/tf_idf_logreg_reddit_5k_20260302_144256/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_10k,7000,test,0.37533333333333335,0.3760524418540277,0.37605244185402775,,TF-IDF + LogReg [reddit_10k],models/tf_idf_logreg_reddit_10k_20260302_144304/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_50k,34976,test,0.40360240160106736,0.40288508762353326,0.4028850876235333,,TF-IDF + LogReg [reddit_50k],models/tf_idf_logreg_reddit_50k_20260302_143503/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_100k,69940,test,0.4196690685882039,0.41850863238219826,0.4184984590947391,,TF-IDF + LogReg [reddit_100k],models/tf_idf_logreg_reddit_100k_20260304_145918/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_500k,349111,test,0.4514102392728245,0.44963737940103277,0.44962298424294017,,TF-IDF + LogReg [reddit_500k],models/tf_idf_logreg_reddit_500k_20260304_150119/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_1k,700,val,0.30666666666666664,0.3069171830057059,0.3069171830057059,,TF-IDF + LogReg [reddit_1k],models/tf_idf_logreg_reddit_1k_20260302_144254/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_5k,3499,val,0.356,0.35829028850759304,0.3582902885075929,,TF-IDF + LogReg [reddit_5k],models/tf_idf_logreg_reddit_5k_20260302_144256/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_10k,7000,val,0.38,0.37855343489584525,0.37855343489584525,,TF-IDF + LogReg [reddit_10k],models/tf_idf_logreg_reddit_10k_20260302_144304/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_50k,34976,val,0.40987324883255505,0.4089841526621397,0.40896872541242135,,TF-IDF + LogReg [reddit_50k],models/tf_idf_logreg_reddit_50k_20260302_143503/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_100k,69940,val,0.4268081131571924,0.4256490727731519,0.42563495686384106,,TF-IDF + LogReg [reddit_100k],models/tf_idf_logreg_reddit_100k_20260304_145918/best_model/model.pkl,loaded
+TF-IDF + LogReg,reddit_500k,349111,val,0.45182462237668763,0.45037950763587553,0.4503674669894556,,TF-IDF + LogReg [reddit_500k],models/tf_idf_logreg_reddit_500k_20260304_150119/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_1k,700,test,0.29333333333333333,0.29115359658880235,0.29115359658880235,,TF-IDF + SVC [reddit_1k],models/tf_idf_svc_reddit_1k_20260302_144254/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_5k,3499,test,0.328,0.32841452834332646,0.32841452834332646,,TF-IDF + SVC [reddit_5k],models/tf_idf_svc_reddit_5k_20260302_144256/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_10k,7000,test,0.358,0.3575832841008969,0.3575832841008969,,TF-IDF + SVC [reddit_10k],models/tf_idf_svc_reddit_10k_20260302_144305/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_50k,34976,test,0.3874583055370247,0.3866401167601713,0.38664011676017135,,TF-IDF + SVC [reddit_50k],models/tf_idf_svc_reddit_50k_20260302_143506/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_100k,69940,test,0.3989191353082466,0.3983694263816543,0.3983583345540505,,TF-IDF + SVC [reddit_100k],models/tf_idf_svc_reddit_100k_20260304_145934/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_500k,349111,test,0.42392728244887046,0.42268373311804625,0.4226647649724512,,TF-IDF + SVC [reddit_500k],models/tf_idf_svc_reddit_500k_20260304_150237/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_1k,700,val,0.29333333333333333,0.29326815763666503,0.29326815763666503,,TF-IDF + SVC [reddit_1k],models/tf_idf_svc_reddit_1k_20260302_144254/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_5k,3499,val,0.35333333333333333,0.3529729322778106,0.35297293227781057,,TF-IDF + SVC [reddit_5k],models/tf_idf_svc_reddit_5k_20260302_144256/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_10k,7000,val,0.37266666666666665,0.37052446692133073,0.3705244669213308,,TF-IDF + SVC [reddit_10k],models/tf_idf_svc_reddit_10k_20260302_144305/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_50k,34976,val,0.3941294196130754,0.3935100483999684,0.3934940517220454,,TF-IDF + SVC [reddit_50k],models/tf_idf_svc_reddit_50k_20260302_143506/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_100k,69940,val,0.39731785428342675,0.39673245173418487,0.3967154175779158,,TF-IDF + SVC [reddit_100k],models/tf_idf_svc_reddit_100k_20260304_145934/best_model/model.pkl,loaded
+TF-IDF + SVC,reddit_500k,349111,val,0.42339259457291806,0.42247023467699646,0.4224529104980086,,TF-IDF + SVC [reddit_500k],models/tf_idf_svc_reddit_500k_20260304_150237/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_1k,700,test,0.26666666666666666,0.2675663240569991,0.26756632405699915,,TF-IDF + XGBoost [reddit_1k],models/tf_idf_xgboost_reddit_1k_20260302_144255/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_5k,3499,test,0.32266666666666666,0.3263937876695314,0.32639378766953137,,TF-IDF + XGBoost [reddit_5k],models/tf_idf_xgboost_reddit_5k_20260302_144303/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_10k,7000,test,0.33666666666666667,0.33646682682044426,0.33646682682044426,,TF-IDF + XGBoost [reddit_10k],models/tf_idf_xgboost_reddit_10k_20260302_144315/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_50k,34976,test,0.380653769179453,0.379931430176677,0.379931430176677,,TF-IDF + XGBoost [reddit_50k],models/tf_idf_xgboost_reddit_50k_20260304_145832/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_100k,69940,test,0.3900453696290366,0.3885665290966353,0.38855688991666265,,TF-IDF + XGBoost [reddit_100k],models/tf_idf_xgboost_reddit_100k_20260304_145954/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_500k,349111,test,0.39370405026066035,0.39327019428272314,0.3932648413529285,,TF-IDF + XGBoost [reddit_500k],models/tf_idf_xgboost_reddit_500k_20260304_151733/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_1k,700,val,0.31333333333333335,0.30581685463272656,0.3058168546327265,,TF-IDF + XGBoost [reddit_1k],models/tf_idf_xgboost_reddit_1k_20260302_144255/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_5k,3499,val,0.33866666666666667,0.3413145069240907,0.34131450692409077,,TF-IDF + XGBoost [reddit_5k],models/tf_idf_xgboost_reddit_5k_20260302_144303/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_10k,7000,val,0.37533333333333335,0.37433059838004545,0.3743305983800455,,TF-IDF + XGBoost [reddit_10k],models/tf_idf_xgboost_reddit_10k_20260302_144315/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_50k,34976,val,0.38905937291527687,0.38828035732959265,0.38827020999268924,,TF-IDF + XGBoost [reddit_50k],models/tf_idf_xgboost_reddit_50k_20260304_145832/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_100k,69940,val,0.38904456898852413,0.38890243490230464,0.38889046051204557,,TF-IDF + XGBoost [reddit_100k],models/tf_idf_xgboost_reddit_100k_20260304_145954/best_model/model.pkl,loaded
+TF-IDF + XGBoost,reddit_500k,349111,val,0.3918727442855233,0.39228017694516165,0.3922727485887033,,TF-IDF + XGBoost [reddit_500k],models/tf_idf_xgboost_reddit_500k_20260304_151733/best_model/model.pkl,loaded

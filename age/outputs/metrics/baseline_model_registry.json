@@ -1,0 +1,21 @@
+{
+  "TF-IDF + LogReg|reddit_1k": "models/tf_idf_logreg_reddit_1k_20260302_144254/best_model/model.pkl",
+  "TF-IDF + SVC|reddit_1k": "models/tf_idf_svc_reddit_1k_20260302_144254/best_model/model.pkl",
+  "TF-IDF + XGBoost|reddit_1k": "models/tf_idf_xgboost_reddit_1k_20260302_144255/best_model/model.pkl",
+  "TF-IDF + LogReg|reddit_5k": "models/tf_idf_logreg_reddit_5k_20260302_144256/best_model/model.pkl",
+  "TF-IDF + SVC|reddit_5k": "models/tf_idf_svc_reddit_5k_20260302_144256/best_model/model.pkl",
+  "TF-IDF + XGBoost|reddit_5k": "models/tf_idf_xgboost_reddit_5k_20260302_144303/best_model/model.pkl",
+  "TF-IDF + LogReg|reddit_10k": "models/tf_idf_logreg_reddit_10k_20260302_144304/best_model/model.pkl",
+  "TF-IDF + SVC|reddit_10k": "models/tf_idf_svc_reddit_10k_20260302_144305/best_model/model.pkl",
+  "TF-IDF + XGBoost|reddit_10k": "models/tf_idf_xgboost_reddit_10k_20260302_144315/best_model/model.pkl",
+  "TF-IDF + LogReg|reddit_50k": "models/tf_idf_logreg_reddit_50k_20260302_143503/best_model/model.pkl",
+  "TF-IDF + SVC|reddit_50k": "models/tf_idf_svc_reddit_50k_20260302_143506/best_model/model.pkl",
+  "TF-IDF + XGBoost|reddit_50k": "models/tf_idf_xgboost_reddit_50k_20260304_145832/best_model/model.pkl",
+  "TF-IDF + LogReg|reddit_100k": "models/tf_idf_logreg_reddit_100k_20260304_145918/best_model/model.pkl",
+  "TF-IDF + SVC|reddit_100k": "models/tf_idf_svc_reddit_100k_20260304_145934/best_model/model.pkl",
+  "TF-IDF + XGBoost|reddit_100k": "models/tf_idf_xgboost_reddit_100k_20260304_145954/best_model/model.pkl",
+  "Majority Class|reddit_500k": "models/majority_class_reddit_500k_20260304_150119/best_model/model.pkl",
+  "TF-IDF + LogReg|reddit_500k": "models/tf_idf_logreg_reddit_500k_20260304_150119/best_model/model.pkl",
+  "TF-IDF + SVC|reddit_500k": "models/tf_idf_svc_reddit_500k_20260304_150237/best_model/model.pkl",
+  "TF-IDF + XGBoost|reddit_500k": "models/tf_idf_xgboost_reddit_500k_20260304_151733/best_model/model.pkl"
+}

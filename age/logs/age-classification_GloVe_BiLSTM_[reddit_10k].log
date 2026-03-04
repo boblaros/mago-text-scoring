@@ -1,0 +1,8 @@
+2026-03-02 16:37:31 | INFO     | Epoch   1/20 | tr_loss=1.5532 | va_loss=1.4855 | val_f1=0.3449 | 9.5s ✓  <-- new best
+2026-03-02 16:37:41 | INFO     | Epoch   2/20 | tr_loss=1.2583 | va_loss=1.5111 | val_f1=0.3743 | 9.0s ✓  <-- new best
+2026-03-02 16:37:50 | INFO     | Epoch   3/20 | tr_loss=0.7392 | va_loss=1.8692 | val_f1=0.3499 | 9.1s
+2026-03-02 16:38:00 | INFO     | Epoch   4/20 | tr_loss=0.3100 | va_loss=2.4598 | val_f1=0.3493 | 9.1s
+2026-03-02 16:38:09 | INFO     | Epoch   5/20 | tr_loss=0.0929 | va_loss=3.0277 | val_f1=0.3550 | 8.8s
+2026-03-02 16:38:09 | INFO     | Early stopping triggered at epoch 5.
+2026-03-02 16:38:09 | INFO     | Restored best checkpoint | val_f1=0.3743 | path=models/GloVe_BiLSTM_[reddit_10k]/best.pt
+2026-03-02 16:38:09 | INFO     | Training complete.

@@ -1,0 +1,7 @@
+2026-03-02 16:10:44 | INFO     | Epoch   1/20 | tr_loss=1.4127 | va_loss=1.3471 | val_f1=0.4192 | 18.9s ✓  <-- new best
+2026-03-02 16:11:06 | INFO     | Epoch   2/20 | tr_loss=1.1512 | va_loss=1.4071 | val_f1=0.4114 | 21.8s
+2026-03-02 16:11:28 | INFO     | Epoch   3/20 | tr_loss=0.8805 | va_loss=1.6209 | val_f1=0.3988 | 21.2s
+2026-03-02 16:11:49 | INFO     | Epoch   4/20 | tr_loss=0.5693 | va_loss=2.1719 | val_f1=0.3895 | 21.0s
+2026-03-02 16:11:49 | INFO     | Early stopping triggered at epoch 4.
+2026-03-02 16:11:49 | INFO     | Restored best checkpoint | val_f1=0.4192 | path=models/GloVe_MLP_[reddit_100k]/best.pt
+2026-03-02 16:11:49 | INFO     | Training complete.

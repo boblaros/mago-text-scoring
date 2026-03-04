@@ -1,0 +1,7 @@
+2026-03-02 20:30:27 | INFO     | Resumed from models/GloVe_BiLSTM_[reddit_500k]/last.pt (epoch=2, best_f1=0.4538)
+2026-03-02 20:39:28 | INFO     | Epoch   3/20 | tr_loss=0.9631 | va_loss=1.4545 | val_f1=0.4420 | 541.3s
+2026-03-02 20:48:24 | INFO     | Epoch   4/20 | tr_loss=0.7805 | va_loss=1.6560 | val_f1=0.4340 | 535.4s
+2026-03-02 20:57:25 | INFO     | Epoch   5/20 | tr_loss=0.7341 | va_loss=1.7811 | val_f1=0.4298 | 540.6s
+2026-03-02 20:57:25 | INFO     | Early stopping triggered at epoch 5.
+2026-03-02 20:57:25 | INFO     | Restored best checkpoint | val_f1=0.4569 | path=models/GloVe_BiLSTM_[reddit_500k]/best.pt
+2026-03-02 20:57:25 | INFO     | Training complete.
