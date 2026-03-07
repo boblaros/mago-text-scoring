@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.49899784150477955,
+    "f1_macro": 0.4516306720370418,
+    "f1_weighted": 0.4829876375121806
+  },
+  "dataset": "TF-IDF + SVC [asap_aes]",
+  "model_path": "models/tf_idf_svc_complexity_train_pool_20260307_162509/best_model/model.pkl",
+  "data_path": "data/data/asap-aes.parquet"
+}

@@ -1,0 +1,8 @@
+2026-03-07 16:31:14 | INFO     | Epoch   1/20 | tr_loss=0.8490 | va_loss=0.7667 | val_f1=0.5619 | 12.4s ✓  <-- new best
+2026-03-07 16:31:23 | INFO     | Epoch   2/20 | tr_loss=0.5650 | va_loss=0.8019 | val_f1=0.5989 | 8.6s ✓  <-- new best
+2026-03-07 16:31:32 | INFO     | Epoch   3/20 | tr_loss=0.3280 | va_loss=1.0091 | val_f1=0.5906 | 8.6s
+2026-03-07 16:31:41 | INFO     | Epoch   4/20 | tr_loss=0.1933 | va_loss=1.3049 | val_f1=0.5758 | 8.6s
+2026-03-07 16:31:50 | INFO     | Epoch   5/20 | tr_loss=0.0969 | va_loss=1.5780 | val_f1=0.5703 | 8.6s
+2026-03-07 16:31:50 | INFO     | Early stopping triggered at epoch 5.
+2026-03-07 16:31:50 | INFO     | Restored best checkpoint | val_f1=0.5989 | path=models/glove_mlp_complexity_train_pool_20260307_163101/best_model/best.pt
+2026-03-07 16:31:50 | INFO     | Training complete.

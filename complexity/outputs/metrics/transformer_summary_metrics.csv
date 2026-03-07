@@ -1,0 +1,2 @@
+experiment,val_f1_macro,test_f1_macro,best_model
+RoBERTa_train_pool,0.7330615540945518,0.7297663021875974,models/roberta_base_complexity_train_pool_20260307_162036/best_model

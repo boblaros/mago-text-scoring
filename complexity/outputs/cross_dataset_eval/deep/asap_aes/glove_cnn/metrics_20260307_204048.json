@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.4971477027443725,
+    "f1_macro": 0.4382008180682237,
+    "f1_weighted": 0.4520735959415534
+  },
+  "dataset": "asap_aes",
+  "best_checkpoint": "models/glove_cnn_complexity_train_pool_20260307_163151/best_model/best.pt",
+  "data_path": "data/data/asap-aes.parquet"
+}

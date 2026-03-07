@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.34714003944773175,
+    "f1_macro": 0.26832434123074517,
+    "f1_weighted": 0.26092763705495803
+  },
+  "dataset": "one_stop",
+  "best_checkpoint": "models/glove_bilstm_complexity_train_pool_20260307_163358/best_model/best.pt",
+  "data_path": "data/data/one-stop-corpus-english.parquet"
+}

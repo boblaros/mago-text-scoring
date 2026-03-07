@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.5620437956204379,
+    "f1_macro": 0.5142095767747489,
+    "f1_weighted": 0.5423036175949415
+  },
+  "dataset": "TF-IDF + SVC [cambridge]",
+  "model_path": "models/tf_idf_svc_complexity_train_pool_20260307_162509/best_model/model.pkl",
+  "data_path": "data/data/cambridge-english-readability.parquet"
+}
