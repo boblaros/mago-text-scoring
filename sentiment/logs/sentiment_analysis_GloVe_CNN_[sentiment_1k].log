@@ -1,0 +1,12 @@
+2026-03-07 12:43:24 | INFO     | Epoch   1/20 | tr_loss=1.3721 | va_loss=0.8097 | val_f1=0.9303 | 2.7s ✓  <-- new best
+2026-03-07 12:43:27 | INFO     | Epoch   2/20 | tr_loss=0.4784 | va_loss=0.3161 | val_f1=0.9460 | 2.9s ✓  <-- new best
+2026-03-07 12:43:29 | INFO     | Epoch   3/20 | tr_loss=0.1682 | va_loss=0.2042 | val_f1=0.9467 | 1.7s ✓  <-- new best
+2026-03-07 12:43:31 | INFO     | Epoch   4/20 | tr_loss=0.0894 | va_loss=0.1800 | val_f1=0.9478 | 1.7s ✓  <-- new best
+2026-03-07 12:43:33 | INFO     | Epoch   5/20 | tr_loss=0.0643 | va_loss=0.1747 | val_f1=0.9486 | 1.8s ✓  <-- new best
+2026-03-07 12:43:35 | INFO     | Epoch   6/20 | tr_loss=0.0450 | va_loss=0.1746 | val_f1=0.9488 | 1.7s ✓  <-- new best
+2026-03-07 12:43:36 | INFO     | Epoch   7/20 | tr_loss=0.0308 | va_loss=0.1768 | val_f1=0.9476 | 1.7s
+2026-03-07 12:43:38 | INFO     | Epoch   8/20 | tr_loss=0.0245 | va_loss=0.1797 | val_f1=0.9475 | 1.8s
+2026-03-07 12:43:40 | INFO     | Epoch   9/20 | tr_loss=0.0213 | va_loss=0.1788 | val_f1=0.9475 | 1.8s
+2026-03-07 12:43:40 | INFO     | Early stopping triggered at epoch 9.
+2026-03-07 12:43:40 | INFO     | Restored best checkpoint | val_f1=0.9488 | path=models/glove_cnn_reddit_1k_20260307_124321/best_model/best.pt
+2026-03-07 12:43:40 | INFO     | Training complete.
