@@ -1,0 +1,425 @@
+{
+  "TF-IDF + LogReg [reddit_1k] | val": {
+    "accuracy": 0.30666666666666664,
+    "f1_macro": 0.3069171830057059,
+    "f1_weighted": 0.3069171830057059
+  },
+  "TF-IDF + LogReg [reddit_1k] | test": {
+    "accuracy": 0.29333333333333333,
+    "f1_macro": 0.2892874867068415,
+    "f1_weighted": 0.2892874867068415
+  },
+  "TF-IDF + SVC [reddit_1k] | val": {
+    "accuracy": 0.29333333333333333,
+    "f1_macro": 0.29326815763666503,
+    "f1_weighted": 0.29326815763666503
+  },
+  "TF-IDF + SVC [reddit_1k] | test": {
+    "accuracy": 0.29333333333333333,
+    "f1_macro": 0.29115359658880235,
+    "f1_weighted": 0.29115359658880235
+  },
+  "TF-IDF + XGBoost [reddit_1k] | val": {
+    "accuracy": 0.31333333333333335,
+    "f1_macro": 0.30581685463272656,
+    "f1_weighted": 0.3058168546327265
+  },
+  "TF-IDF + XGBoost [reddit_1k] | test": {
+    "accuracy": 0.26666666666666666,
+    "f1_macro": 0.2675663240569991,
+    "f1_weighted": 0.26756632405699915
+  },
+  "TF-IDF + LogReg [reddit_5k] | val": {
+    "accuracy": 0.356,
+    "f1_macro": 0.35829028850759304,
+    "f1_weighted": 0.3582902885075929
+  },
+  "TF-IDF + LogReg [reddit_5k] | test": {
+    "accuracy": 0.32666666666666666,
+    "f1_macro": 0.32802342205208807,
+    "f1_weighted": 0.32802342205208807
+  },
+  "TF-IDF + SVC [reddit_5k] | val": {
+    "accuracy": 0.35333333333333333,
+    "f1_macro": 0.3529729322778106,
+    "f1_weighted": 0.35297293227781057
+  },
+  "TF-IDF + SVC [reddit_5k] | test": {
+    "accuracy": 0.328,
+    "f1_macro": 0.32841452834332646,
+    "f1_weighted": 0.32841452834332646
+  },
+  "TF-IDF + XGBoost [reddit_5k] | val": {
+    "accuracy": 0.33866666666666667,
+    "f1_macro": 0.3413145069240907,
+    "f1_weighted": 0.34131450692409077
+  },
+  "TF-IDF + XGBoost [reddit_5k] | test": {
+    "accuracy": 0.32266666666666666,
+    "f1_macro": 0.3263937876695314,
+    "f1_weighted": 0.32639378766953137
+  },
+  "TF-IDF + LogReg [reddit_10k] | val": {
+    "accuracy": 0.38,
+    "f1_macro": 0.37855343489584525,
+    "f1_weighted": 0.37855343489584525
+  },
+  "TF-IDF + LogReg [reddit_10k] | test": {
+    "accuracy": 0.37533333333333335,
+    "f1_macro": 0.3760524418540277,
+    "f1_weighted": 0.37605244185402775
+  },
+  "TF-IDF + SVC [reddit_10k] | val": {
+    "accuracy": 0.37266666666666665,
+    "f1_macro": 0.37052446692133073,
+    "f1_weighted": 0.3705244669213308
+  },
+  "TF-IDF + SVC [reddit_10k] | test": {
+    "accuracy": 0.358,
+    "f1_macro": 0.3575832841008969,
+    "f1_weighted": 0.3575832841008969
+  },
+  "TF-IDF + XGBoost [reddit_10k] | val": {
+    "accuracy": 0.37533333333333335,
+    "f1_macro": 0.37433059838004545,
+    "f1_weighted": 0.3743305983800455
+  },
+  "TF-IDF + XGBoost [reddit_10k] | test": {
+    "accuracy": 0.33666666666666667,
+    "f1_macro": 0.33646682682044426,
+    "f1_weighted": 0.33646682682044426
+  },
+  "TF-IDF + LogReg [reddit_50k] | val": {
+    "accuracy": 0.40987324883255505,
+    "f1_macro": 0.4089841526621397,
+    "f1_weighted": 0.40896872541242135
+  },
+  "TF-IDF + LogReg [reddit_50k] | test": {
+    "accuracy": 0.40360240160106736,
+    "f1_macro": 0.40288508762353326,
+    "f1_weighted": 0.4028850876235333
+  },
+  "TF-IDF + SVC [reddit_50k] | val": {
+    "accuracy": 0.3941294196130754,
+    "f1_macro": 0.3935100483999684,
+    "f1_weighted": 0.3934940517220454
+  },
+  "TF-IDF + SVC [reddit_50k] | test": {
+    "accuracy": 0.3874583055370247,
+    "f1_macro": 0.3866401167601713,
+    "f1_weighted": 0.38664011676017135
+  },
+  "TF-IDF + XGBoost [reddit_50k] | val": {
+    "accuracy": 0.38905937291527687,
+    "f1_macro": 0.38828035732959265,
+    "f1_weighted": 0.38827020999268924
+  },
+  "TF-IDF + XGBoost [reddit_50k] | test": {
+    "accuracy": 0.380653769179453,
+    "f1_macro": 0.379931430176677,
+    "f1_weighted": 0.379931430176677
+  },
+  "TF-IDF + LogReg [reddit_100k] | val": {
+    "accuracy": 0.4268081131571924,
+    "f1_macro": 0.4256490727731519,
+    "f1_weighted": 0.42563495686384106
+  },
+  "TF-IDF + LogReg [reddit_100k] | test": {
+    "accuracy": 0.4196690685882039,
+    "f1_macro": 0.41850863238219826,
+    "f1_weighted": 0.4184984590947391
+  },
+  "TF-IDF + SVC [reddit_100k] | val": {
+    "accuracy": 0.39731785428342675,
+    "f1_macro": 0.39673245173418487,
+    "f1_weighted": 0.3967154175779158
+  },
+  "TF-IDF + SVC [reddit_100k] | test": {
+    "accuracy": 0.3989191353082466,
+    "f1_macro": 0.3983694263816543,
+    "f1_weighted": 0.3983583345540505
+  },
+  "TF-IDF + XGBoost [reddit_100k] | val": {
+    "accuracy": 0.38904456898852413,
+    "f1_macro": 0.38890243490230464,
+    "f1_weighted": 0.38889046051204557
+  },
+  "TF-IDF + XGBoost [reddit_100k] | test": {
+    "accuracy": 0.3900453696290366,
+    "f1_macro": 0.3885665290966353,
+    "f1_weighted": 0.38855688991666265
+  },
+  "Majority Class [reddit_500k] | val": {
+    "accuracy": 0.20033417992247027,
+    "f1_macro": 0.06675946857912848,
+    "f1_weighted": 0.06687101694929813
+  },
+  "Majority Class [reddit_500k] | test": {
+    "accuracy": 0.20033417992247027,
+    "f1_macro": 0.06675946857912848,
+    "f1_weighted": 0.06687101694929813
+  },
+  "TF-IDF + LogReg [reddit_500k] | val": {
+    "accuracy": 0.45182462237668763,
+    "f1_macro": 0.45037950763587553,
+    "f1_weighted": 0.4503674669894556
+  },
+  "TF-IDF + LogReg [reddit_500k] | test": {
+    "accuracy": 0.4514102392728245,
+    "f1_macro": 0.44963737940103277,
+    "f1_weighted": 0.44962298424294017
+  },
+  "TF-IDF + SVC [reddit_500k] | val": {
+    "accuracy": 0.42339259457291806,
+    "f1_macro": 0.42247023467699646,
+    "f1_weighted": 0.4224529104980086
+  },
+  "TF-IDF + SVC [reddit_500k] | test": {
+    "accuracy": 0.42392728244887046,
+    "f1_macro": 0.42268373311804625,
+    "f1_weighted": 0.4226647649724512
+  },
+  "TF-IDF + XGBoost [reddit_500k] | val": {
+    "accuracy": 0.3918727442855233,
+    "f1_macro": 0.39228017694516165,
+    "f1_weighted": 0.3922727485887033
+  },
+  "TF-IDF + XGBoost [reddit_500k] | test": {
+    "accuracy": 0.39370405026066035,
+    "f1_macro": 0.39327019428272314,
+    "f1_weighted": 0.3932648413529285
+  },
+  "LC | Majority Class | reddit_500k": {
+    "f1_macro": 0.06675946857912848
+  },
+  "LC | TF-IDF + LogReg | reddit_1k": {
+    "f1_macro": 0.3069171830057059
+  },
+  "LC | TF-IDF + LogReg | reddit_5k": {
+    "f1_macro": 0.35829028850759304
+  },
+  "LC | TF-IDF + LogReg | reddit_10k": {
+    "f1_macro": 0.37855343489584525
+  },
+  "LC | TF-IDF + LogReg | reddit_50k": {
+    "f1_macro": 0.4089841526621397
+  },
+  "LC | TF-IDF + LogReg | reddit_100k": {
+    "f1_macro": 0.4256490727731519
+  },
+  "LC | TF-IDF + LogReg | reddit_500k": {
+    "f1_macro": 0.45037950763587553
+  },
+  "LC | TF-IDF + SVC | reddit_1k": {
+    "f1_macro": 0.29326815763666503
+  },
+  "LC | TF-IDF + SVC | reddit_5k": {
+    "f1_macro": 0.3529729322778106
+  },
+  "LC | TF-IDF + SVC | reddit_10k": {
+    "f1_macro": 0.37052446692133073
+  },
+  "LC | TF-IDF + SVC | reddit_50k": {
+    "f1_macro": 0.3935100483999684
+  },
+  "LC | TF-IDF + SVC | reddit_100k": {
+    "f1_macro": 0.39673245173418487
+  },
+  "LC | TF-IDF + SVC | reddit_500k": {
+    "f1_macro": 0.42247023467699646
+  },
+  "LC | TF-IDF + XGBoost | reddit_1k": {
+    "f1_macro": 0.30581685463272656
+  },
+  "LC | TF-IDF + XGBoost | reddit_5k": {
+    "f1_macro": 0.3413145069240907
+  },
+  "LC | TF-IDF + XGBoost | reddit_10k": {
+    "f1_macro": 0.37433059838004545
+  },
+  "LC | TF-IDF + XGBoost | reddit_50k": {
+    "f1_macro": 0.38828035732959265
+  },
+  "LC | TF-IDF + XGBoost | reddit_100k": {
+    "f1_macro": 0.38890243490230464
+  },
+  "LC | TF-IDF + XGBoost | reddit_500k": {
+    "f1_macro": 0.39228017694516165
+  },
+  "GloVe MLP [reddit_10k] | val": {
+    "accuracy": 0.3953333333333333,
+    "f1_macro": 0.39268500641196696,
+    "f1_weighted": 0.392685006411967
+  },
+  "GloVe MLP [reddit_10k] | test": {
+    "accuracy": 0.35733333333333334,
+    "f1_macro": 0.3532447773858129,
+    "f1_weighted": 0.3532447773858129
+  },
+  "GloVe MLP [reddit_100k] | val": {
+    "accuracy": 0.41886842807579394,
+    "f1_macro": 0.4191554214479548,
+    "f1_weighted": 0.41914019305142947
+  },
+  "GloVe MLP [reddit_100k] | test": {
+    "accuracy": 0.4145316253002402,
+    "f1_macro": 0.41458104924098516,
+    "f1_weighted": 0.414567141357015
+  },
+  "GloVe MLP [reddit_500k] | val": {
+    "accuracy": 0.44567571180323484,
+    "f1_macro": 0.4437818161298262,
+    "f1_weighted": 0.4437576836293604
+  },
+  "GloVe MLP [reddit_500k] | test": {
+    "accuracy": 0.4452479615024729,
+    "f1_macro": 0.4432644392557304,
+    "f1_weighted": 0.4432439715170801
+  },
+  "GloVe CNN [reddit_10k] | val": {
+    "accuracy": 0.35533333333333333,
+    "f1_macro": 0.3573404791992951,
+    "f1_weighted": 0.3573404791992951
+  },
+  "GloVe CNN [reddit_10k] | test": {
+    "accuracy": 0.35133333333333333,
+    "f1_macro": 0.35185688630575723,
+    "f1_weighted": 0.35185688630575723
+  },
+  "GloVe CNN [reddit_100k] | val": {
+    "accuracy": 0.4192020282892981,
+    "f1_macro": 0.41667507340893656,
+    "f1_weighted": 0.4166623314517049
+  },
+  "GloVe CNN [reddit_100k] | test": {
+    "accuracy": 0.4174673071790766,
+    "f1_macro": 0.41459984605492306,
+    "f1_weighted": 0.4145886879636096
+  },
+  "GloVe CNN [reddit_500k] | val": {
+    "accuracy": 0.453629193958027,
+    "f1_macro": 0.44973193537565576,
+    "f1_weighted": 0.44971932411795446
+  },
+  "GloVe CNN [reddit_500k] | test": {
+    "accuracy": 0.4510760593503542,
+    "f1_macro": 0.4470052185125269,
+    "f1_weighted": 0.4469913774793675
+  },
+  "GloVe BiLSTM [reddit_10k] | val": {
+    "accuracy": 0.36466666666666664,
+    "f1_macro": 0.3602227854804292,
+    "f1_weighted": 0.36022278548042913
+  },
+  "GloVe BiLSTM [reddit_10k] | test": {
+    "accuracy": 0.35133333333333333,
+    "f1_macro": 0.34456430556651496,
+    "f1_weighted": 0.34456430556651496
+  },
+  "GloVe BiLSTM [reddit_100k] | val": {
+    "accuracy": 0.42026954897251134,
+    "f1_macro": 0.42232720204149726,
+    "f1_weighted": 0.42231399158715116
+  },
+  "GloVe BiLSTM [reddit_100k] | test": {
+    "accuracy": 0.41293034427542036,
+    "f1_macro": 0.41496045126986425,
+    "f1_weighted": 0.4149532781767791
+  },
+  "GloVe BiLSTM [reddit_500k] | val": {
+    "accuracy": 0.4612351289934501,
+    "f1_macro": 0.45778980370910427,
+    "f1_weighted": 0.4577753601166803
+  },
+  "GloVe BiLSTM [reddit_500k] | test": {
+    "accuracy": 0.4605133003609143,
+    "f1_macro": 0.4570277834499792,
+    "f1_weighted": 0.45701295278886417
+  },
+  "LC | GloVe BiLSTM | reddit_10k": {
+    "f1_macro": 0.3602227854804292
+  },
+  "LC | GloVe BiLSTM | reddit_100k": {
+    "f1_macro": 0.42232720204149726
+  },
+  "LC | GloVe BiLSTM | reddit_500k": {
+    "f1_macro": 0.45778980370910427
+  },
+  "LC | GloVe CNN | reddit_10k": {
+    "f1_macro": 0.3573404791992951
+  },
+  "LC | GloVe CNN | reddit_100k": {
+    "f1_macro": 0.41667507340893656
+  },
+  "LC | GloVe CNN | reddit_500k": {
+    "f1_macro": 0.44973193537565576
+  },
+  "LC | GloVe MLP | reddit_10k": {
+    "f1_macro": 0.39268500641196696
+  },
+  "LC | GloVe MLP | reddit_100k": {
+    "f1_macro": 0.4191554214479548
+  },
+  "LC | GloVe MLP | reddit_500k": {
+    "f1_macro": 0.4437818161298262
+  },
+  "DistilBERT_500k | val": {
+    "accuracy": 0.5014169228712739,
+    "f1_macro": 0.500556561904604,
+    "f1_weighted": 0.5005451453504786
+  },
+  "DistilBERT_500k | test": {
+    "accuracy": 0.5007619302232322,
+    "f1_macro": 0.4991819498556428,
+    "f1_weighted": 0.499172504643608
+  },
+  "RoBERTa_500k | val": {
+    "accuracy": 0.5176981686940249,
+    "f1_macro": 0.5170770990752951,
+    "f1_weighted": 0.517067918567647
+  },
+  "RoBERTa_500k | test": {
+    "accuracy": 0.5176580671033284,
+    "f1_macro": 0.5170145939218276,
+    "f1_weighted": 0.5170052860730421
+  },
+  "DistilBERT_1000k | val": {
+    "accuracy": 0.5918066666666667,
+    "f1_macro": 0.5883555803728207,
+    "f1_weighted": 0.5883555803728207
+  },
+  "DistilBERT_1000k | test": {
+    "accuracy": 0.5370933333333333,
+    "f1_macro": 0.5350899183439646,
+    "f1_weighted": 0.5350899183439645
+  },
+  "LC | DistilBERT_1000k | reddit_1000k": {
+    "f1_macro": 0.5883555803728207
+  },
+  "LC | RoBERTa_500k | reddit_500k": {
+    "f1_macro": 0.5170770990752951
+  },
+  "LC | DistilBERT_500k | reddit_500k": {
+    "f1_macro": 0.500556561904604
+  },
+  "DistilBERT_1000k [tweets] | val": {
+    "accuracy": 0.22364238587493657,
+    "f1_macro": 0.20484570705579452,
+    "f1_weighted": 0.2029544270823077
+  },
+  "DistilBERT_1000k [tweets] | test": {
+    "accuracy": 0.2245639340759142,
+    "f1_macro": 0.2061055657318091,
+    "f1_weighted": 0.2040247845974347
+  },
+  "DistilBERT_1000k [blog] | val": {
+    "accuracy": 0.24023171841515564,
+    "f1_macro": 0.18122123235126497,
+    "f1_weighted": 0.3177790732599452
+  },
+  "DistilBERT_1000k [blog] | test": {
+    "accuracy": 0.23819635395770747,
+    "f1_macro": 0.18069400459534846,
+    "f1_weighted": 0.3161646716513031
+  }
+}

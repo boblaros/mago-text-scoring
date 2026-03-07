@@ -1,3 +1,19 @@
-# Ignore all archive folders
+# Data directories
+data/
+
+# Archive directories
 archive/
 **/archive/
+
+# Data files
+*.parquet
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.bz2
+*.xz
