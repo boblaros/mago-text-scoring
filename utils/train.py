@@ -71,64 +71,7 @@ warnings.filterwarnings("ignore")
 logging.basicConfig(level=logging.INFO)
 print("Imports OK")
 
-# oversampling only on train
-from imblearn.over_sampling import RandomOverSampler
-import numpy as np
-import pandas as pd
 
-# Original non-oversampled data from df_train
-# Make copies to ensure we're working with the initial split, not already modified global variables
-X_train_initial_clean = df_train["text_clean"].values.copy()
-X_train_initial_raw = df_train["text_raw"].values.copy()
-y_train_initial = df_train["label_enc"].values.copy()
-
-# Creo un dizionario con 8.000 esempi per ciascuna classe
-classes = np.unique(y_train_initial)
-sampling_dict = {cls: 8000 for cls in classes}
-
-# Inizializzo oversampler
-ros = RandomOverSampler(sampling_strategy=sampling_dict, random_state=42)
-
-# Oversample the indices to apply the same sampling strategy to all related arrays
-original_indices = np.arange(len(y_train_initial)).reshape(-1, 1)
-
-# Fit and resample on these indices and the labels.
-# The X_res will contain the oversampled indices.
-indices_resampled, y_res = ros.fit_resample(original_indices, y_train_initial)
-
-# Now use these resampled indices to create the new X_train, X_train_raw, and y_train
-X_train = X_train_initial_clean[indices_resampled.flatten()]
-X_train_raw = X_train_initial_raw[indices_resampled.flatten()]
-y_train = y_res
-
-print(f"Oversampled X_train length: {len(X_train)}")
-print(f"Oversampled X_train_raw length: {len(X_train_raw)}")
-print(f"Oversampled y_train length: {len(y_train)}")
-
-logreg = LogisticRegression(
-    max_iter=1000, C=1.0,
-    class_weight=CFG["class_weight"],
-    solver="saga",
-    random_state=CFG["seed"]
-)
-
-if CFG["use_cv"]:
-    cv_scores = cross_val_score(
-        logreg, X_tr_tfidf, y_train,
-        cv=cv, scoring="f1_macro", n_jobs=-1
-    )
-    print(f"[LogReg CV] F1-macro: {cv_scores.mean():.4f} ± {cv_scores.std():.4f}")
-
-logreg.fit(X_tr_tfidf, y_train)
-
-evaluate_clf("TF-IDF + LogReg", y_val,
-             logreg.predict(X_va_tfidf), label_encoder=le, split="val")
-evaluate_clf("TF-IDF + LogReg", y_test,
-             logreg.predict(X_te_tfidf),
-             logreg.predict_proba(X_te_tfidf), label_encoder=le)
-plot_confusion_matrix_clf(y_test, logreg.predict(X_te_tfidf), "TF-IDF + LogReg", le)
-
-joblib.dump(logreg, CFG["model_dir"] / "logreg.pkl")
 
 def build_vocab(texts, max_vocab: int = 30_000,
                 pad_token: str = "<PAD>", unk_token: str = "<UNK>") -> dict:
