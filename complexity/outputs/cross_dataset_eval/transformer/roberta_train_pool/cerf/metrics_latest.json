@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.5083724045545881,
+    "f1_macro": 0.4615078423688992,
+    "f1_weighted": 0.4754635056812469
+  },
+  "best_model_dir": "models/roberta_base_complexity_train_pool_20260307_162036/best_model",
+  "dataset": "cerf",
+  "evaluation_dir": "outputs/cross_dataset_eval/transformer/roberta_train_pool/cerf"
+}

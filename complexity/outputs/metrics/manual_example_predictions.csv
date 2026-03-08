@@ -1,0 +1,9 @@
+example_id,text,DeBERTaV3_label,DeBERTaV3_conf,GloVe_BiLSTM_label,GloVe_BiLSTM_conf
+1,The boy has a small dog. The dog is brown and friendly.,B1-B2,0.5645282864570618,B1-B2,0.9545841813087463
+2,My sister goes to school by bus and comes home in the afternoon.,B1-B2,0.5060160160064697,A1-A2,0.6837078332901001
+3,The museum opened a new room where visitors can learn about life in ancient cities.,B1-B2,0.5297347903251648,B1-B2,0.521766185760498
+4,"Although the weather forecast predicted heavy rain, the match continued because the pitch remained playable.",B1-B2,0.4810847342014313,B1-B2,0.6220280528068542
+5,Researchers compared the two groups carefully in order to determine whether the intervention had any measurable effect.,B1-B2,0.4548090994358063,B1-B2,0.39631497859954834
+6,"Notwithstanding the apparent simplicity of the proposal, its implementation would require a sequence of interdependent regulatory revisions.",B1-B2,0.4681660234928131,C1-C2,0.9676215052604675
+7,"The committee acknowledged that, in the absence of reliable longitudinal evidence, any definitive conclusion would remain provisional.",C1-C2,0.4668876528739929,A1-A2,0.4590006172657013
+8,"By foregrounding the tension between economic efficiency and social equity, the report complicates any straightforward interpretation of the policy debate.",B1-B2,0.4470742642879486,B1-B2,0.3824934661388397

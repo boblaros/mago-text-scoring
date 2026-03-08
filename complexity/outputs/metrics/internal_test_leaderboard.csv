@@ -1,0 +1,11 @@
+Model | Split,accuracy,f1_macro,f1_weighted,loss,model_name,metric_split
+DeBERTaV3_train_pool | test,0.7791026978685348,0.7510812492382728,0.7760556709086348,0.5336738107592773,DeBERTaV3_train_pool,test
+DistilBERT_train_pool | test,0.7746310925622298,0.7430667400906253,0.7720896637566615,,DistilBERT_train_pool,test
+RoBERTa_train_pool | test,0.7676255775823521,0.7297663021875974,0.7644717465447768,,RoBERTa_train_pool,test
+TF-IDF + SVC [train_pool] | test,0.7002533909673573,0.6686789738725382,0.699786931830328,,TF-IDF + SVC [train_pool],test
+TF-IDF + LogReg [train_pool] | test,0.6835593978238188,0.6607874127954448,0.6863970572448843,,TF-IDF + LogReg [train_pool],test
+GloVe BiLSTM [train_pool] | test,0.6926516619466389,0.6551661294897166,0.6923209903034657,,GloVe BiLSTM [train_pool],test
+GloVe CNN [train_pool] | test,0.6795349530481443,0.6388266463257223,0.6766999349479854,,GloVe CNN [train_pool],test
+GloVe MLP [train_pool] | test,0.6527053212103145,0.5964460940300637,0.6426749637907794,,GloVe MLP [train_pool],test
+TF-IDF + XGBoost [train_pool] | test,0.673870919660158,0.534220517963146,0.6343891751219696,,TF-IDF + XGBoost [train_pool],test
+Majority Class [train_pool] | test,0.5447905798181547,0.2351087096359192,0.3842550307285518,,Majority Class [train_pool],test
