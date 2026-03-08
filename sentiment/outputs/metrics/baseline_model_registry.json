@@ -1,6 +1,18 @@
 {
-  "Majority Class|sentiment_combined": "models\\majority_class_df_raw_sentiment_combined_20260307_000118\\best_model\\model.pkl",
-  "TF-IDF + LogReg|sentiment_combined": "models\\tf_idf_logreg_df_raw_sentiment_combined_20260307_000118\\best_model\\model.pkl",
-  "TF-IDF + SVC|sentiment_combined": "models\\tf_idf_svc_df_raw_sentiment_combined_20260307_000124\\best_model\\model.pkl",
-  "TF-IDF + XGBoost|sentiment_combined": "models\\tf_idf_xgboost_df_raw_sentiment_combined_20260307_000131\\best_model\\model.pkl"
+  "TF-IDF + LogReg|sentiment_1k": "models/tf_idf_logreg_sentiment_1k_20260307_115723/best_model/model.pkl",
+  "TF-IDF + SVC|sentiment_1k": "models/tf_idf_svc_sentiment_1k_20260307_115723/best_model/model.pkl",
+  "TF-IDF + XGBoost|sentiment_1k": "models/tf_idf_xgboost_sentiment_1k_20260307_120159/best_model/model.pkl",
+  "TF-IDF + LogReg|sentiment_5k": "models/tf_idf_logreg_sentiment_5k_20260307_115723/best_model/model.pkl",
+  "TF-IDF + SVC|sentiment_5k": "models/tf_idf_svc_sentiment_5k_20260307_115723/best_model/model.pkl",
+  "TF-IDF + XGBoost|sentiment_5k": "models/tf_idf_xgboost_sentiment_5k_20260307_120159/best_model/model.pkl",
+  "TF-IDF + LogReg|sentiment_10k": "models/tf_idf_logreg_sentiment_10k_20260307_115723/best_model/model.pkl",
+  "TF-IDF + SVC|sentiment_10k": "models/tf_idf_svc_sentiment_10k_20260307_115724/best_model/model.pkl",
+  "TF-IDF + XGBoost|sentiment_10k": "models/tf_idf_xgboost_sentiment_10k_20260307_115951/best_model/model.pkl",
+  "TF-IDF + LogReg|sentiment_30k": "models/tf_idf_logreg_sentiment_30k_20260307_115724/best_model/model.pkl",
+  "TF-IDF + SVC|sentiment_30k": "models/tf_idf_svc_sentiment_30k_20260307_115725/best_model/model.pkl",
+  "TF-IDF + XGBoost|sentiment_30k": "models/tf_idf_xgboost_sentiment_30k_20260307_115951/best_model/model.pkl",
+  "Majority Class|sentiment_60k": "models/majority_class_sentiment_60k_20260307_115726/best_model/model.pkl",
+  "TF-IDF + LogReg|sentiment_60k": "models/tf_idf_logreg_sentiment_60k_20260307_115726/best_model/model.pkl",
+  "TF-IDF + SVC|sentiment_60k": "models/tf_idf_svc_sentiment_60k_20260307_115728/best_model/model.pkl",
+  "TF-IDF + XGBoost|sentiment_60k": "models/tf_idf_xgboost_sentiment_60k_20260307_120201/best_model/model.pkl"
 }
