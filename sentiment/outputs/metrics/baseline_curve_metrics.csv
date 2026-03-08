@@ -1,0 +1,5 @@
+model,split_key,train_size,f1_macro
+Majority Class,sentiment_combined,60760,0.03571428571428571
+TF-IDF + LogReg,sentiment_combined,60760,0.9486479081589557
+TF-IDF + SVC,sentiment_combined,60760,0.9500106043390179
+TF-IDF + XGBoost,sentiment_combined,60760,0.9167828996556568
