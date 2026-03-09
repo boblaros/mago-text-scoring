@@ -1,0 +1,9 @@
+2026-03-07 12:20:27 | INFO     | Epoch   1/20 | tr_loss=1.5255 | va_loss=0.8468 | val_f1=0.8047 | 4.5s ✓  <-- new best
+2026-03-07 12:20:30 | INFO     | Epoch   2/20 | tr_loss=0.3996 | va_loss=0.3912 | val_f1=0.8890 | 3.0s ✓  <-- new best
+2026-03-07 12:20:32 | INFO     | Epoch   3/20 | tr_loss=0.1137 | va_loss=0.3573 | val_f1=0.8914 | 2.4s ✓  <-- new best
+2026-03-07 12:20:35 | INFO     | Epoch   4/20 | tr_loss=0.0464 | va_loss=0.3759 | val_f1=0.8883 | 2.4s
+2026-03-07 12:20:37 | INFO     | Epoch   5/20 | tr_loss=0.0252 | va_loss=0.4037 | val_f1=0.8831 | 2.4s
+2026-03-07 12:20:40 | INFO     | Epoch   6/20 | tr_loss=0.0146 | va_loss=0.4059 | val_f1=0.8862 | 2.4s
+2026-03-07 12:20:40 | INFO     | Early stopping triggered at epoch 6.
+2026-03-07 12:20:40 | INFO     | Restored best checkpoint | val_f1=0.8914 | path=models/glove_mlp_reddit_10k_20260307_122022/best_model/best.pt
+2026-03-07 12:20:40 | INFO     | Training complete.

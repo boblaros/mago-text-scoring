@@ -1,0 +1,18 @@
+{
+  "TF-IDF + LogReg|sentiment_1k": "models\\tf_idf_logreg_sentiment_1k_20260308_163812\\best_model\\model.pkl",
+  "TF-IDF + SVC|sentiment_1k": "models\\tf_idf_svc_sentiment_1k_20260308_163813\\best_model\\model.pkl",
+  "TF-IDF + XGBoost|sentiment_1k": "models\\tf_idf_xgboost_sentiment_1k_20260308_163813\\best_model\\model.pkl",
+  "TF-IDF + LogReg|sentiment_5k": "models\\tf_idf_logreg_sentiment_5k_20260308_163814\\best_model\\model.pkl",
+  "TF-IDF + SVC|sentiment_5k": "models\\tf_idf_svc_sentiment_5k_20260308_163815\\best_model\\model.pkl",
+  "TF-IDF + XGBoost|sentiment_5k": "models\\tf_idf_xgboost_sentiment_5k_20260308_163816\\best_model\\model.pkl",
+  "TF-IDF + LogReg|sentiment_10k": "models\\tf_idf_logreg_sentiment_10k_20260308_163816\\best_model\\model.pkl",
+  "TF-IDF + SVC|sentiment_10k": "models\\tf_idf_svc_sentiment_10k_20260308_163817\\best_model\\model.pkl",
+  "TF-IDF + XGBoost|sentiment_10k": "models\\tf_idf_xgboost_sentiment_10k_20260308_163819\\best_model\\model.pkl",
+  "TF-IDF + LogReg|sentiment_30k": "models\\tf_idf_logreg_sentiment_30k_20260308_163819\\best_model\\model.pkl",
+  "TF-IDF + SVC|sentiment_30k": "models\\tf_idf_svc_sentiment_30k_20260308_163823\\best_model\\model.pkl",
+  "TF-IDF + XGBoost|sentiment_30k": "models\\tf_idf_xgboost_sentiment_30k_20260308_163826\\best_model\\model.pkl",
+  "Majority Class|sentiment_60k": "models\\majority_class_sentiment_60k_20260308_163827\\best_model\\model.pkl",
+  "TF-IDF + LogReg|sentiment_60k": "models\\tf_idf_logreg_sentiment_60k_20260308_163827\\best_model\\model.pkl",
+  "TF-IDF + SVC|sentiment_60k": "models\\tf_idf_svc_sentiment_60k_20260308_163833\\best_model\\model.pkl",
+  "TF-IDF + XGBoost|sentiment_60k": "models\\tf_idf_xgboost_sentiment_60k_20260308_163840\\best_model\\model.pkl"
+}
