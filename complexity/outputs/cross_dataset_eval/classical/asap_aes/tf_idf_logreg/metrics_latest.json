@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.5168054270736971,
+    "f1_macro": 0.48665155149245193,
+    "f1_weighted": 0.513196355862802
+  },
+  "dataset": "TF-IDF + LogReg [asap_aes]",
+  "model_path": "models/tf_idf_logreg_complexity_train_pool_20260307_162504/best_model/model.pkl",
+  "data_path": "data/data/asap-aes.parquet"
+}

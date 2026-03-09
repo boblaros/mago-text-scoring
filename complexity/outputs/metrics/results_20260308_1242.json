@@ -1,0 +1,104 @@
+{
+  "Majority Class [train_pool] | test": {
+    "accuracy": 0.5447905798181547,
+    "f1_macro": 0.2351087096359192,
+    "f1_weighted": 0.3842550307285518
+  },
+  "Majority Class [train_pool] | val": {
+    "accuracy": 0.5447905798181547,
+    "f1_macro": 0.2351087096359192,
+    "f1_weighted": 0.3842550307285518
+  },
+  "TF-IDF + LogReg [train_pool] | test": {
+    "accuracy": 0.6835593978238188,
+    "f1_macro": 0.6607874127954448,
+    "f1_weighted": 0.6863970572448843
+  },
+  "TF-IDF + LogReg [train_pool] | val": {
+    "accuracy": 0.687434789089283,
+    "f1_macro": 0.6638297278844316,
+    "f1_weighted": 0.690419988715249
+  },
+  "TF-IDF + SVC [train_pool] | test": {
+    "accuracy": 0.7002533909673573,
+    "f1_macro": 0.6686789738725382,
+    "f1_weighted": 0.699786931830328
+  },
+  "TF-IDF + SVC [train_pool] | val": {
+    "accuracy": 0.7033835146817707,
+    "f1_macro": 0.6715812296572087,
+    "f1_weighted": 0.7031439429213354
+  },
+  "TF-IDF + XGBoost [train_pool] | test": {
+    "accuracy": 0.673870919660158,
+    "f1_macro": 0.534220517963146,
+    "f1_weighted": 0.6343891751219696
+  },
+  "TF-IDF + XGBoost [train_pool] | val": {
+    "accuracy": 0.6838575048442391,
+    "f1_macro": 0.5511682982723338,
+    "f1_weighted": 0.6471030135091829
+  },
+  "GloVe BiLSTM [train_pool] | val": {
+    "accuracy": 0.682963183782978,
+    "f1_macro": 0.6450992102932628,
+    "f1_weighted": 0.6830474215229027
+  },
+  "GloVe CNN [train_pool] | val": {
+    "accuracy": 0.6744671337009986,
+    "f1_macro": 0.6303509816605484,
+    "f1_weighted": 0.6712168813094422
+  },
+  "GloVe MLP [train_pool] | val": {
+    "accuracy": 0.654941123863467,
+    "f1_macro": 0.5989057106653234,
+    "f1_weighted": 0.6457117995420596
+  },
+  "GloVe BiLSTM [train_pool] | test": {
+    "accuracy": 0.6926516619466389,
+    "f1_macro": 0.6551661294897166,
+    "f1_weighted": 0.6923209903034657
+  },
+  "GloVe CNN [train_pool] | test": {
+    "accuracy": 0.6795349530481443,
+    "f1_macro": 0.6388266463257223,
+    "f1_weighted": 0.6766999349479854
+  },
+  "GloVe MLP [train_pool] | test": {
+    "accuracy": 0.6527053212103145,
+    "f1_macro": 0.5964460940300637,
+    "f1_weighted": 0.6426749637907794
+  },
+  "DistilBERT_train_pool | val": {
+    "accuracy": 0.7677746310925623,
+    "f1_macro": 0.7371779636790571,
+    "f1_weighted": 0.7648968334776791
+  },
+  "DistilBERT_train_pool | test": {
+    "accuracy": 0.7746310925622298,
+    "f1_macro": 0.7430667400906253,
+    "f1_weighted": 0.7720896637566615
+  },
+  "RoBERTa_train_pool | val": {
+    "accuracy": 0.7655388284394098,
+    "f1_macro": 0.7330615540945518,
+    "f1_weighted": 0.7626462251487529
+  },
+  "RoBERTa_train_pool | test": {
+    "accuracy": 0.7676255775823521,
+    "f1_macro": 0.7297663021875974,
+    "f1_weighted": 0.7644717465447768
+  },
+  "DeBERTaV3_train_pool | val": {
+    "accuracy": 0.7758235206439111,
+    "f1_macro": 0.7472642374252682,
+    "f1_weighted": 0.7729281844657435,
+    "loss": 0.5425933509103785
+  },
+  "DeBERTaV3_train_pool | test": {
+    "accuracy": 0.7791026978685348,
+    "f1_macro": 0.7510812492382728,
+    "f1_weighted": 0.7760556709086348,
+    "loss": 0.5336738107592773
+  }
+}

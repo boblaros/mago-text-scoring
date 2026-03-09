@@ -1,6 +1,7 @@
 # ignore models and data inside submodules
 */models/
 */data/
+*/archive/
 
 
 # notebooks junk

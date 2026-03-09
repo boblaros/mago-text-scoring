@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.4755525787006028,
+    "f1_macro": 0.46901230562852986,
+    "f1_weighted": 0.4713734894353851
+  },
+  "dataset": "cerf",
+  "best_checkpoint": "models/glove_cnn_complexity_train_pool_20260307_163151/best_model/best.pt",
+  "data_path": "data/data/cerf-levelled-english-texts.parquet"
+}

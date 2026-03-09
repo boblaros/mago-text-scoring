@@ -1,0 +1,5 @@
+model,split_key,train_size,f1_macro
+Majority Class,train_pool,31305,0.2351087096359192
+TF-IDF + LogReg,train_pool,31305,0.6638297278844316
+TF-IDF + SVC,train_pool,31305,0.6715812296572087
+TF-IDF + XGBoost,train_pool,31305,0.5511682982723338

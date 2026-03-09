@@ -1,0 +1,4 @@
+model,split_key,train_size,split,accuracy,f1_macro,f1_weighted,roc_auc,results_key
+GloVe BiLSTM,train_pool,31305,val,0.682963183782978,0.6450992102932628,0.6830474215229027,,GloVe BiLSTM [train_pool] | val
+GloVe CNN,train_pool,31305,val,0.6744671337009986,0.6303509816605484,0.6712168813094422,,GloVe CNN [train_pool] | val
+GloVe MLP,train_pool,31305,val,0.654941123863467,0.5989057106653234,0.6457117995420596,,GloVe MLP [train_pool] | val

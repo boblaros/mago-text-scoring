@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.46538698735738515,
+    "f1_macro": 0.2117242709593701,
+    "f1_weighted": 0.2956011618366599
+  },
+  "dataset": "Majority Class [asap_aes]",
+  "model_path": "models/majority_class_complexity_train_pool_20260307_162504/best_model/model.pkl",
+  "data_path": "data/data/asap-aes.parquet"
+}

@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.3347209374036386,
+    "f1_macro": 0.27111634765941933,
+    "f1_weighted": 0.283481045323367
+  },
+  "best_model_dir": "models/deberta_v3_base_complexity_train_pool_20260307_174910/best_model",
+  "dataset": "asap_aes",
+  "evaluation_dir": "outputs/cross_dataset_eval/transformer/asap_aes"
+}

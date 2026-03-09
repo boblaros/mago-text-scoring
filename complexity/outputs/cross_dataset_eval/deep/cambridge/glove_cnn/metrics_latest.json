@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.5218978102189781,
+    "f1_macro": 0.44976660052569684,
+    "f1_weighted": 0.4690033480083393
+  },
+  "dataset": "cambridge",
+  "best_checkpoint": "models/glove_cnn_complexity_train_pool_20260307_163151/best_model/best.pt",
+  "data_path": "data/data/cambridge-english-readability.parquet"
+}

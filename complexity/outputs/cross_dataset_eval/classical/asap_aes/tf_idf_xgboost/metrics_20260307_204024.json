@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.395004625346901,
+    "f1_macro": 0.2348165906798615,
+    "f1_weighted": 0.2892482628596905
+  },
+  "dataset": "TF-IDF + XGBoost [asap_aes]",
+  "model_path": "models/tf_idf_xgboost_complexity_train_pool_20260307_162512/best_model/model.pkl",
+  "data_path": "data/data/asap-aes.parquet"
+}

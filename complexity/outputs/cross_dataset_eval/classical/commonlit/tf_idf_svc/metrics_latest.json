@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.4795680711412238,
+    "f1_macro": 0.3954482636556748,
+    "f1_weighted": 0.45127183375783686
+  },
+  "dataset": "TF-IDF + SVC [commonlit]",
+  "model_path": "models/tf_idf_svc_complexity_train_pool_20260307_162509/best_model/model.pkl",
+  "data_path": "data/data/commonlit-readability-prize.parquet"
+}

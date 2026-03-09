@@ -1,0 +1,15 @@
+{
+  "val": {
+    "accuracy": 0.7655388284394098,
+    "f1_macro": 0.7330615540945518,
+    "f1_weighted": 0.7626462251487529
+  },
+  "test": {
+    "accuracy": 0.7676255775823521,
+    "f1_macro": 0.7297663021875974,
+    "f1_weighted": 0.7644717465447768
+  },
+  "best_model_dir": "models/roberta_base_complexity_train_pool_20260307_162036/best_model",
+  "checkpoints_dir": "models/roberta_base_complexity_train_pool_20260307_162036/checkpoints",
+  "experiment_dir": "models/roberta_base_complexity_train_pool_20260307_162036"
+}

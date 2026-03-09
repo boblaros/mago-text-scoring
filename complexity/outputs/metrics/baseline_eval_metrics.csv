@@ -1,0 +1,9 @@
+model,split_key,train_size,split,accuracy,f1_macro,f1_weighted,roc_auc,model_tag,model_path,status
+Majority Class,train_pool,31305,test,0.5447905798181547,0.2351087096359192,0.3842550307285518,,Majority Class [train_pool],models/majority_class_complexity_train_pool_20260307_162504/best_model/model.pkl,loaded
+Majority Class,train_pool,31305,val,0.5447905798181547,0.2351087096359192,0.3842550307285518,,Majority Class [train_pool],models/majority_class_complexity_train_pool_20260307_162504/best_model/model.pkl,loaded
+TF-IDF + LogReg,train_pool,31305,test,0.6835593978238188,0.6607874127954448,0.6863970572448843,,TF-IDF + LogReg [train_pool],models/tf_idf_logreg_complexity_train_pool_20260307_162504/best_model/model.pkl,loaded
+TF-IDF + LogReg,train_pool,31305,val,0.687434789089283,0.6638297278844316,0.690419988715249,,TF-IDF + LogReg [train_pool],models/tf_idf_logreg_complexity_train_pool_20260307_162504/best_model/model.pkl,loaded
+TF-IDF + SVC,train_pool,31305,test,0.7002533909673573,0.6686789738725382,0.699786931830328,,TF-IDF + SVC [train_pool],models/tf_idf_svc_complexity_train_pool_20260307_162509/best_model/model.pkl,loaded
+TF-IDF + SVC,train_pool,31305,val,0.7033835146817707,0.6715812296572087,0.7031439429213354,,TF-IDF + SVC [train_pool],models/tf_idf_svc_complexity_train_pool_20260307_162509/best_model/model.pkl,loaded
+TF-IDF + XGBoost,train_pool,31305,test,0.673870919660158,0.534220517963146,0.6343891751219696,,TF-IDF + XGBoost [train_pool],models/tf_idf_xgboost_complexity_train_pool_20260307_162512/best_model/model.pkl,loaded
+TF-IDF + XGBoost,train_pool,31305,val,0.6838575048442391,0.5511682982723338,0.6471030135091829,,TF-IDF + XGBoost [train_pool],models/tf_idf_xgboost_complexity_train_pool_20260307_162512/best_model/model.pkl,loaded

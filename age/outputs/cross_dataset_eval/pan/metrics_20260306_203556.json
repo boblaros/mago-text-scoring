@@ -1,0 +1,16 @@
+{
+  "eval": {
+    "accuracy": 0.12356251207874497,
+    "f1_macro": 0.10117820147776943,
+    "f1_weighted": 0.15261898918912756
+  },
+  "best_model_dir": "models/distilbert_reddit_1000k_20260223_233842/best_model",
+  "dataset": "pan13_pan14_pan15_combined",
+  "evaluation_dir": "outputs/cross_dataset_eval/pan",
+  "data_paths": [
+    "data/pan13/pan13.parquet",
+    "data/pan14/pan14.parquet",
+    "data/pan15/pan15.parquet",
+    "outputs/cross_dataset_eval/pan/pan13_pan14_pan15_combined.parquet"
+  ]
+}

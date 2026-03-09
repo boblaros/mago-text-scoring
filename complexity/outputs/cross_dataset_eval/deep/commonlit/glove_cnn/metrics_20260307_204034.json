@@ -1,0 +1,10 @@
+{
+  "eval": {
+    "accuracy": 0.4810501799703578,
+    "f1_macro": 0.38143877588078,
+    "f1_weighted": 0.4455566825696011
+  },
+  "dataset": "commonlit",
+  "best_checkpoint": "models/glove_cnn_complexity_train_pool_20260307_163151/best_model/best.pt",
+  "data_path": "data/data/commonlit-readability-prize.parquet"
+}
