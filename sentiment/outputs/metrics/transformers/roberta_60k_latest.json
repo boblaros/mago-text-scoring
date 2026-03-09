@@ -1,0 +1,15 @@
+{
+  "val": {
+    "accuracy": 0.9749615975422427,
+    "f1_macro": 0.9749309736629245,
+    "f1_weighted": 0.9749309736629246
+  },
+  "test": {
+    "accuracy": 0.9758064516129032,
+    "f1_macro": 0.9757628997739106,
+    "f1_weighted": 0.9757628997739106
+  },
+  "best_model_dir": "models\\roberta_base_sentiment_60k_20260308_223331\\best_model",
+  "checkpoints_dir": "models\\roberta_base_sentiment_60k_20260308_223331\\checkpoints",
+  "experiment_dir": "models\\roberta_base_sentiment_60k_20260308_223331"
+}

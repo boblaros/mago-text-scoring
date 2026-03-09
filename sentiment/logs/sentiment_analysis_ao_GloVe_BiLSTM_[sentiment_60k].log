@@ -1,0 +1,8 @@
+2026-03-08 19:03:33 | INFO     | Epoch   1/20 | tr_loss=0.4023 | va_loss=0.1317 | val_f1=0.9613 | 25.4s ✓  <-- new best
+2026-03-08 19:04:01 | INFO     | Epoch   2/20 | tr_loss=0.0672 | va_loss=0.1291 | val_f1=0.9621 | 26.5s ✓  <-- new best
+2026-03-08 19:04:59 | INFO     | Epoch   3/20 | tr_loss=0.0374 | va_loss=0.1483 | val_f1=0.9535 | 58.4s
+2026-03-08 19:05:25 | INFO     | Epoch   4/20 | tr_loss=0.0257 | va_loss=0.1417 | val_f1=0.9605 | 25.2s
+2026-03-08 19:05:50 | INFO     | Epoch   5/20 | tr_loss=0.0142 | va_loss=0.1654 | val_f1=0.9575 | 25.3s
+2026-03-08 19:05:50 | INFO     | Early stopping triggered at epoch 5.
+2026-03-08 19:05:50 | INFO     | Restored best checkpoint | val_f1=0.9621 | path=models\glove_bilstm_sentiment_60k_20260308_190307\best_model\best.pt
+2026-03-08 19:05:50 | INFO     | Training complete.

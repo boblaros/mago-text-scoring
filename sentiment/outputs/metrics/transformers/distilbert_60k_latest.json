@@ -1,15 +1,15 @@
 {
   "val": {
-    "accuracy": 0.20629800307219662,
-    "f1_macro": 0.1628828546321588,
-    "f1_weighted": 0.1628828546321588
+    "accuracy": 0.9754992319508449,
+    "f1_macro": 0.975430376084535,
+    "f1_weighted": 0.9754303760845349
   },
   "test": {
-    "accuracy": 0.19800307219662058,
-    "f1_macro": 0.1557400694411795,
-    "f1_weighted": 0.15574006944117946
+    "accuracy": 0.976036866359447,
+    "f1_macro": 0.9759652821941509,
+    "f1_weighted": 0.9759652821941509
   },
-  "best_model_dir": "models/distilbert_reddit_60k_20260307_125447/best_model",
-  "checkpoints_dir": "models/distilbert_reddit_60k_20260307_125447/checkpoints",
-  "experiment_dir": "models/distilbert_reddit_60k_20260307_125447"
+  "best_model_dir": "models\\distilbert_sentiment_60k_20260308_134122\\best_model",
+  "checkpoints_dir": "models\\distilbert_sentiment_60k_20260308_134122\\checkpoints",
+  "experiment_dir": "models\\distilbert_sentiment_60k_20260308_134122"
 }
