@@ -4,10 +4,14 @@
 */archive/
 */prod-model/
 
+# keep application source versioned
+!app/
+!app/**
+
+# but keep local app models out of git
+app/app-models/
 
 # notebooks junk
 .ipynb_checkpoints/
 __pycache__/
 .DS_Store
-
-app/

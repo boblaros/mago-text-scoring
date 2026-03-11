@@ -1,0 +1,2 @@
+"""Model registry primitives."""
+

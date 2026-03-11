@@ -1,0 +1,38 @@
+{
+  "request_id": "4f5ef921-e67f-4032-aef4-0e7708882c1f",
+  "text_profile": {
+    "char_count": 156,
+    "word_count": 28,
+    "line_count": 1
+  },
+  "routing": {
+    "mode": "broadcast-active-domains",
+    "requested_domains": ["sentiment", "complexity", "age", "abuse"],
+    "resolved_domains": ["sentiment", "complexity", "age", "abuse"]
+  },
+  "results": [
+    {
+      "domain": "sentiment",
+      "display_name": "Sentiment",
+      "predicted_label": "Joy",
+      "confidence": 0.93,
+      "probabilities": [
+        { "label": "Joy", "score": 0.93 },
+        { "label": "Neutral", "score": 0.04 },
+        { "label": "Surprise", "score": 0.02 }
+      ],
+      "model_id": "sentiment-distilbert-60k",
+      "model_name": "DistilBERT_60k",
+      "model_version": null,
+      "latency_ms": 41.4,
+      "sequence_length_used": 28,
+      "was_truncated": false
+    }
+  ],
+  "aggregate": {
+    "summary": "The text reads as Joy, lands in B1-B2 complexity, aligns most with the 18-29 age band, and maps to the Not Cyberbullying abuse class.",
+    "mean_confidence": 0.86,
+    "highest_confidence_domain": "sentiment"
+  }
+}
+

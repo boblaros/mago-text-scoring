@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      MODEL_DISCOVERY_ROOT: ${MODEL_DISCOVERY_ROOT:-/srv/app/app-models}
+      MODEL_PRELOAD: ${MODEL_PRELOAD:-false}
+    working_dir: /srv/app/backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/srv/app/backend
+      - ./app-models:/srv/app/app-models
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: dev
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    working_dir: /srv/app/frontend
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    volumes:
+      - ./frontend:/srv/app/frontend
+      - /srv/app/frontend/node_modules
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"

@@ -1,0 +1,34 @@
+{
+  "domains": [
+    {
+      "domain": "sentiment",
+      "display_name": "Sentiment",
+      "color_token": "sentiment",
+      "group": "sentiment-core",
+      "active_model_id": "sentiment-distilbert-60k",
+      "active_model_name": "DistilBERT_60k",
+      "active_model_version": null,
+      "model_count": 1,
+      "models": [
+        {
+          "model_id": "sentiment-distilbert-60k",
+          "display_name": "DistilBERT_60k",
+          "description": "Final 7-class sentiment classifier.",
+          "version": null,
+          "framework_type": "transformers",
+          "framework_task": "sequence-classification",
+          "framework_library": "huggingface",
+          "backbone": "distilbert-base-uncased",
+          "architecture": "DistilBertForSequenceClassification",
+          "runtime_device": "auto",
+          "runtime_max_sequence_length": 256,
+          "output_type": "single-label-classification",
+          "is_active": true,
+          "priority": 100,
+          "notes": [],
+          "missing_artifacts": []
+        }
+      ]
+    }
+  ]
+}
