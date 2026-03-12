@@ -71,11 +71,13 @@ function buildThemedFigure(source: Record<string, unknown>) {
   const data = Array.isArray(source.data) ? source.data : [];
   const layout = (source.layout ?? {}) as Record<string, unknown>;
   const font = (layout.font ?? {}) as Record<string, unknown>;
+  const { width: _width, height: _height, ...layoutWithoutFixedSize } = layout;
 
   return {
     data,
     layout: {
-      ...layout,
+      ...layoutWithoutFixedSize,
+      autosize: true,
       paper_bgcolor: "transparent",
       plot_bgcolor: "transparent",
       font: {
@@ -119,9 +121,13 @@ function buildThemedFigure(source: Record<string, unknown>) {
 
 interface PlotlyFigureProps {
   figure: DashboardFigure;
+  variant?: "default" | "modal";
 }
 
-export function PlotlyFigure({ figure }: PlotlyFigureProps) {
+export function PlotlyFigure({
+  figure,
+  variant = "default",
+}: PlotlyFigureProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -137,6 +143,10 @@ export function PlotlyFigure({ figure }: PlotlyFigureProps) {
     setIsLoading(true);
 
     let resizeHandler: (() => void) | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    let resizeTimeoutId: number | null = null;
+    let resizeFrameId: number | null = null;
+    let followUpFrameId: number | null = null;
 
     void loadPlotlyLibrary()
       .then((plotly) => {
@@ -144,6 +154,32 @@ export function PlotlyFigure({ figure }: PlotlyFigureProps) {
           return;
         }
         const themedFigure = buildThemedFigure(figure.figure);
+        const resizePlot = () => {
+          if (containerRef.current && plotly.Plots) {
+            plotly.Plots.resize(containerRef.current);
+          }
+        };
+        const scheduleResize = () => {
+          if (resizeFrameId !== null) {
+            window.cancelAnimationFrame(resizeFrameId);
+          }
+          if (followUpFrameId !== null) {
+            window.cancelAnimationFrame(followUpFrameId);
+          }
+          if (resizeTimeoutId !== null) {
+            window.clearTimeout(resizeTimeoutId);
+          }
+
+          resizeFrameId = window.requestAnimationFrame(() => {
+            resizePlot();
+            followUpFrameId = window.requestAnimationFrame(() => {
+              resizePlot();
+            });
+          });
+          resizeTimeoutId = window.setTimeout(() => {
+            resizePlot();
+          }, variant === "modal" ? 140 : 80);
+        };
         return plotly
           .newPlot(
             containerRef.current,
@@ -156,12 +192,20 @@ export function PlotlyFigure({ figure }: PlotlyFigureProps) {
               return;
             }
             resizeHandler = () => {
-              if (containerRef.current && plotly.Plots) {
-                plotly.Plots.resize(containerRef.current);
-              }
+              scheduleResize();
             };
             window.addEventListener("resize", resizeHandler);
+            if (typeof ResizeObserver !== "undefined") {
+              resizeObserver = new ResizeObserver(() => {
+                scheduleResize();
+              });
+              if (containerRef.current.parentElement) {
+                resizeObserver.observe(containerRef.current.parentElement);
+              }
+              resizeObserver.observe(containerRef.current);
+            }
             setIsLoading(false);
+            scheduleResize();
           });
       })
       .catch((loadError) => {
@@ -176,14 +220,26 @@ export function PlotlyFigure({ figure }: PlotlyFigureProps) {
       if (resizeHandler) {
         window.removeEventListener("resize", resizeHandler);
       }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      if (resizeFrameId !== null) {
+        window.cancelAnimationFrame(resizeFrameId);
+      }
+      if (followUpFrameId !== null) {
+        window.cancelAnimationFrame(followUpFrameId);
+      }
+      if (resizeTimeoutId !== null) {
+        window.clearTimeout(resizeTimeoutId);
+      }
       if (window.Plotly && element) {
         window.Plotly.purge(element);
       }
     };
-  }, [figure]);
+  }, [figure, variant]);
 
   return (
-    <article className="plotly-card">
+    <article className={`plotly-card${variant === "modal" ? " plotly-card--modal" : ""}`}>
       <div className="plotly-card__header">
         <div>
           <div className="plotly-card__eyebrow">Plotly</div>
