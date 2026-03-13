@@ -37,7 +37,7 @@ SECTION_TITLES = {
     "benchmark": "Benchmark",
     "training_curves": "Training Curves",
     "learning_curves": "Learning Curves",
-    "cross_dataset": "Cross Dataset Evaluation",
+    "cross_dataset": "Cross Dataset Eval.",
     "confusion_matrix": "Confusion Matrix",
     "class_distribution": "Class Distribution",
     "samples": "Prediction Samples",
@@ -2057,7 +2057,7 @@ def _make_cross_dataset_figure(rows: list[dict[str, Any]]) -> dict[str, Any] | N
         return None
     labels = [str(row.get("dataset") or row.get("model") or "Dataset") for row in rows]
     return _make_bar_figure(
-        title="Cross Dataset Evaluation",
+        title="Cross Dataset Eval.",
         x_values=labels,
         y_values=[value or 0.0 for value in values],
         x_title="Dataset",

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { PlotlyFigure } from "./PlotlyFigure";
 import type {
@@ -34,6 +34,19 @@ const CHART_SECTION_PRIORITY: Record<string, number> = {
   class_distribution: 4,
   cross_dataset: 5,
   additional_charts: 6,
+};
+
+const ARTEFACTS_AND_CHARTS_ORDER: Record<string, number> = {
+  summary: 0,
+  evaluation: 1,
+  benchmark: 2,
+  cross_dataset: 3,
+  class_distribution: 4,
+  confusion_matrix: 5,
+  training_curves: 6,
+  learning_curves: 7,
+  samples: 8,
+  metadata: 9,
 };
 
 function asRecord(value: unknown) {
@@ -119,6 +132,51 @@ function formatSplitLabel(value: string) {
   return formatLabel(value);
 }
 
+function formatCoverageSectionTitle(section: DashboardSectionSummary) {
+  if (section.id === "training_curves") {
+    return "Training Charts";
+  }
+  if (section.id === "cross_dataset") {
+    return "Cross Dataset Eval.";
+  }
+  return section.title;
+}
+
+function formatCoverageSectionDescription(section: DashboardSectionSummary) {
+  if (section.id === "summary") {
+    return "Open compact model info and output details.";
+  }
+  if (section.id === "evaluation") {
+    return "Jump to primary validation and test metrics.";
+  }
+  if (section.id === "benchmark") {
+    return "Leaderboard context and production rank.";
+  }
+  if (section.id === "cross_dataset") {
+    return "External dataset performance checks.";
+  }
+  if (section.id === "class_distribution") {
+    return "Label balance across splits and source data.";
+  }
+  if (section.id === "confusion_matrix") {
+    return "Class-level prediction mix from static matrices.";
+  }
+  if (section.id === "training_curves") {
+    return "Training loss and metric trend charts.";
+  }
+  if (section.id === "learning_curves") {
+    return "Quality versus sample size checkpoints.";
+  }
+  if (section.id === "samples") {
+    return "Prediction examples with labels and scores.";
+  }
+  if (section.id === "metadata") {
+    return "Sources, provenance, bundles, and manifest links.";
+  }
+
+  return String(section.reason ?? section.description ?? "No notes attached.");
+}
+
 function splitTone(value: string) {
   if (value === "validation" || value === "val") {
     return "validation";
@@ -147,25 +205,6 @@ function comparisonTone(label: string) {
     return "training";
   }
   return "default";
-}
-
-function metadataFactClass(label: string, group: "core" | "runtime" | "summary") {
-  const classes = ["models-dashboard__mini-fact", `models-dashboard__mini-fact--${group}`];
-
-  if (label === "Model ID") {
-    classes.push("models-dashboard__mini-fact--mono", "models-dashboard__mini-fact--wide-value");
-  }
-  if (label === "Architecture") {
-    classes.push("models-dashboard__mini-fact--wide-value");
-  }
-  if (label === "Max seq") {
-    classes.push("models-dashboard__mini-fact--numeric");
-  }
-  if (label === "Device") {
-    classes.push("models-dashboard__mini-fact--device");
-  }
-
-  return classes.join(" ");
 }
 
 function traceabilitySourceItemClass(category: string) {
@@ -271,6 +310,22 @@ function chartKindLabel(kind: ChartIndicatorKind) {
   return "Missing";
 }
 
+function chartDescriptionText(section: DashboardSectionSummary) {
+  if (section.id === "benchmark") {
+    return "Production model against benchmark peers.";
+  }
+
+  if (section.id === "class_distribution") {
+    return "Class balance across splits and source data.";
+  }
+
+  return String(
+    section.description ??
+      section.reason ??
+      "No visual artifact or chart payload was attached for this section.",
+  );
+}
+
 function buildChartIndicators(
   sections: DashboardSectionSummary[],
   figures: DashboardFigure[],
@@ -298,16 +353,14 @@ function buildChartIndicators(
         figures: sectionFigures,
         images: sectionImages,
         kind,
-        metaLabel: totalAssets
-          ? `${totalAssets} asset${totalAssets === 1 ? "" : "s"}`
-          : humanizeStatus(section.status),
-        actionLabel:
-          kind === "plotly" ? "Open viewer" : kind === "image" ? "Open image" : "Review status",
-        descriptionText: String(
-          section.description ??
-            section.reason ??
-            "No visual artifact or chart payload was attached for this section.",
-        ),
+        metaLabel:
+          kind === "missing"
+            ? "0 assets"
+            : totalAssets
+              ? `${totalAssets} asset${totalAssets === 1 ? "" : "s"}`
+              : humanizeStatus(section.status),
+        actionLabel: "",
+        descriptionText: chartDescriptionText(section),
       };
     });
 
@@ -327,7 +380,7 @@ function buildChartIndicators(
       images: unsectionedImages,
       kind: unsectionedFigures.length ? "plotly" : unsectionedImages.length ? "image" : "missing",
       metaLabel: `${totalAssets} asset${totalAssets === 1 ? "" : "s"}`,
-      actionLabel: "Open viewer",
+      actionLabel: "",
       descriptionText: "Extra visual outputs collected outside the standard dashboard sections.",
     });
   }
@@ -336,6 +389,54 @@ function buildChartIndicators(
     (left, right) =>
       (CHART_SECTION_PRIORITY[left.id] ?? 99) - (CHART_SECTION_PRIORITY[right.id] ?? 99),
   );
+}
+
+function buildMissingPreviewIndicator(section: DashboardSectionSummary): ChartIndicator {
+  return {
+    ...section,
+    figures: [],
+    images: [],
+    kind: "missing",
+    metaLabel: "0 assets",
+    actionLabel: "",
+    descriptionText: chartDescriptionText(section),
+  };
+}
+
+function countFigureTraces(figure: DashboardFigure) {
+  return Array.isArray(figure.figure.data) ? figure.figure.data.length : 0;
+}
+
+function summarizeFigureTraceKinds(figure: DashboardFigure) {
+  const traceKinds = Array.from(
+    new Set(
+      (Array.isArray(figure.figure.data) ? figure.figure.data : [])
+        .map((trace) => {
+          const traceRecord = asRecord(trace);
+          return typeof traceRecord?.type === "string" ? traceRecord.type : "trace";
+        })
+        .filter(Boolean),
+    ),
+  );
+
+  if (!traceKinds.length) {
+    return "Interactive figure payload";
+  }
+
+  return traceKinds.slice(0, 3).map((kind) => formatLabel(kind)).join(" · ");
+}
+
+function summarizeChartAssets(indicator: ChartIndicator) {
+  const parts: string[] = [];
+
+  if (indicator.figures.length) {
+    parts.push(`${indicator.figures.length} figure${indicator.figures.length === 1 ? "" : "s"}`);
+  }
+  if (indicator.images.length) {
+    parts.push(`${indicator.images.length} image${indicator.images.length === 1 ? "" : "s"}`);
+  }
+
+  return parts.join(" · ") || "No chart assets attached";
 }
 
 function DashboardDetail({
@@ -494,17 +595,18 @@ function SampleCards({
 interface ModelDashboardPanelProps {
   model: DomainCatalogModel;
   dashboard: ModelDashboardResponse;
+  onOpenModelInfo: () => void;
 }
 
 export function ModelDashboardPanel({
   model,
   dashboard,
+  onOpenModelInfo,
 }: ModelDashboardPanelProps) {
   const manifestSections = dashboard.manifest?.sections ?? [];
   const overview = asRecord(dashboard.overview);
   const sourceAudit = asRecord(dashboard.source_audit);
   const metadataModel = asRecord(findDocument(dashboard, "metadata/model.json"));
-  const experimentConfig = asRecord(findDocument(dashboard, "metadata/experiment-config.json"));
   const primaryEvaluation = asRecord(findDocument(dashboard, "metrics/primary-evaluation.json"));
   const benchmarkRows = toRecordArray(findDocument(dashboard, "metrics/benchmark-test.json"));
   const crossDatasetRows = toRecordArray(findDocument(dashboard, "metrics/cross-dataset.json"));
@@ -516,14 +618,9 @@ export function ModelDashboardPanel({
   const predictionSamples = toRecordArray(findDocument(dashboard, "samples/prediction-samples.json"));
   const trainingHistory = asRecord(findDocument(dashboard, "curves/training-history.json"));
 
-  const metadataFramework = asRecord(metadataModel?.framework);
-  const metadataRuntime = asRecord(metadataModel?.runtime);
-  const metadataLabels = asRecord(metadataModel?.labels);
   const metadataUi = asRecord(metadataModel?.ui);
   const metadataArtifacts = asRecord(metadataModel?.artifacts);
   const artifactPaths = asRecord(primaryEvaluation?.artifact_paths);
-  const outputPaths = asRecord(experimentConfig?.output_paths);
-  const labelClasses = toRecordArray(metadataLabels?.classes);
   const artifactsPresent = asArray(metadataModel?.artifacts_present).map(String);
 
   const chartIndicators = useMemo(
@@ -532,29 +629,55 @@ export function ModelDashboardPanel({
   );
 
   const [openChartSectionId, setOpenChartSectionId] = useState<string | null>(null);
+  const [chartViewerSectionId, setChartViewerSectionId] = useState<string | null>(null);
+  const [chartViewerImageIndex, setChartViewerImageIndex] = useState(0);
+  const overviewRef = useRef<HTMLElement | null>(null);
+  const evaluationRef = useRef<HTMLElement | null>(null);
+  const metadataRef = useRef<HTMLElement | null>(null);
   const chartDialogRef = useRef<HTMLDivElement | null>(null);
   const chartDialogBodyRef = useRef<HTMLDivElement | null>(null);
+  const chartViewerRef = useRef<HTMLDivElement | null>(null);
+  const chartViewerBodyRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setOpenChartSectionId(null);
+    setChartViewerSectionId(null);
   }, [model.model_id]);
 
-  useEffect(() => {
-    if (!openChartSectionId) {
+  useLayoutEffect(() => {
+    if (!openChartSectionId && !chartViewerSectionId) {
       return;
     }
-    if (!chartIndicators.some((indicator) => indicator.id === openChartSectionId)) {
+
+    const hasOpenChartSection = openChartSectionId
+      ? chartIndicators.some((indicator) => indicator.id === openChartSectionId) ||
+        manifestSections.some(
+          (section) => section.id === openChartSectionId && section.id === "samples" && section.status === "missing",
+        )
+      : true;
+    const hasOpenChartViewer = chartViewerSectionId
+      ? chartIndicators.some((indicator) => indicator.id === chartViewerSectionId)
+      : true;
+
+    if (!hasOpenChartSection) {
       setOpenChartSectionId(null);
     }
-  }, [chartIndicators, openChartSectionId]);
+    if (!hasOpenChartViewer) {
+      setChartViewerSectionId(null);
+    }
+  }, [chartIndicators, chartViewerSectionId, openChartSectionId]);
 
-  useEffect(() => {
-    if (!openChartSectionId) {
+  useLayoutEffect(() => {
+    if (!openChartSectionId && !chartViewerSectionId) {
       return;
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        if (chartViewerSectionId) {
+          setChartViewerSectionId(null);
+          return;
+        }
         setOpenChartSectionId(null);
       }
     };
@@ -596,7 +719,7 @@ export function ModelDashboardPanel({
       document.documentElement.style.overscrollBehavior = previousHtmlOverscrollBehavior;
       window.scrollTo(0, scrollY);
     };
-  }, [openChartSectionId]);
+  }, [chartViewerSectionId, openChartSectionId]);
 
   useEffect(() => {
     if (!openChartSectionId) {
@@ -613,8 +736,93 @@ export function ModelDashboardPanel({
     };
   }, [openChartSectionId]);
 
-  const openChartIndicator = chartIndicators.find((indicator) => indicator.id === openChartSectionId) ?? null;
+  useEffect(() => {
+    if (!chartViewerSectionId) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      chartViewerRef.current?.focus();
+      chartViewerBodyRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [chartViewerSectionId]);
+
+  const openChartIndicator =
+    chartIndicators.find((indicator) => indicator.id === openChartSectionId) ??
+    (() => {
+      const missingSection = manifestSections.find(
+        (section) => section.id === openChartSectionId && section.id === "samples" && section.status === "missing",
+      );
+      return missingSection ? buildMissingPreviewIndicator(missingSection) : null;
+    })();
+  const openChartViewerIndicator =
+    chartIndicators.find((indicator) => indicator.id === chartViewerSectionId) ?? null;
+  const viewerHasImageGallery = Boolean(
+    openChartViewerIndicator?.images.length && !openChartViewerIndicator?.figures.length,
+  );
+  const viewerImageCount = openChartViewerIndicator?.images.length ?? 0;
+  const activeViewerImage =
+    viewerHasImageGallery && openChartViewerIndicator
+      ? openChartViewerIndicator.images[Math.min(chartViewerImageIndex, openChartViewerIndicator.images.length - 1)]
+      : null;
+  const chartIndicatorById = useMemo(
+    () => new Map(chartIndicators.map((indicator) => [indicator.id, indicator])),
+    [chartIndicators],
+  );
   const closeChartModal = () => setOpenChartSectionId(null);
+  const closeChartViewer = () => setChartViewerSectionId(null);
+  const openChartViewer = (sectionId: string) => {
+    setOpenChartSectionId(null);
+    setChartViewerSectionId(sectionId);
+  };
+  const showPreviousViewerImage = () => {
+    if (!openChartViewerIndicator?.images.length) {
+      return;
+    }
+    setChartViewerImageIndex((current) =>
+      current === 0 ? openChartViewerIndicator.images.length - 1 : current - 1,
+    );
+  };
+  const showNextViewerImage = () => {
+    if (!openChartViewerIndicator?.images.length) {
+      return;
+    }
+    setChartViewerImageIndex((current) =>
+      current === openChartViewerIndicator.images.length - 1 ? 0 : current + 1,
+    );
+  };
+  const scrollToSection = (ref: { current: HTMLElement | null }) => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  useEffect(() => {
+    setChartViewerImageIndex(0);
+  }, [chartViewerSectionId]);
+
+  useEffect(() => {
+    if (!viewerHasImageGallery || !openChartViewerIndicator || openChartViewerIndicator.images.length <= 1) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        showPreviousViewerImage();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        showNextViewerImage();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openChartViewerIndicator, viewerHasImageGallery]);
 
   const notes = useMemo(
     () =>
@@ -645,6 +853,15 @@ export function ModelDashboardPanel({
           missing: 0,
           not_applicable: 0,
         },
+      ),
+    [manifestSections],
+  );
+
+  const artefactsAndChartsSections = useMemo(
+    () =>
+      [...manifestSections].sort(
+        (left, right) =>
+          (ARTEFACTS_AND_CHARTS_ORDER[left.id] ?? 99) - (ARTEFACTS_AND_CHARTS_ORDER[right.id] ?? 99),
       ),
     [manifestSections],
   );
@@ -735,39 +952,6 @@ export function ModelDashboardPanel({
     },
   ];
 
-  const metadataCoreFacts = [
-    { label: "Model ID", value: model.model_id },
-    { label: "Task", value: String(metadataFramework?.task ?? model.framework_task ?? "—") },
-    { label: "Framework", value: String(metadataFramework?.type ?? model.framework_type) },
-    {
-      label: "Architecture",
-      value: String(
-        metadataFramework?.architecture ??
-          metadataFramework?.backbone ??
-          model.architecture ??
-          model.backbone ??
-          "—",
-      ),
-    },
-  ];
-
-  const metadataRuntimeFacts = [
-    { label: "Library", value: String(metadataFramework?.library ?? model.framework_library ?? "—") },
-    { label: "Device", value: String(metadataRuntime?.device ?? model.runtime_device ?? "—") },
-    {
-      label: "Max seq",
-      value: String(metadataRuntime?.max_sequence_length ?? model.runtime_max_sequence_length ?? "—"),
-    },
-    { label: "Output", value: String(metadataLabels?.type ?? model.output_type ?? "—") },
-  ];
-
-  const metadataSummaryFacts = [
-    { label: "Label classes", value: String(labelClasses.length || "—") },
-    { label: "Output groups", value: String(outputPaths ? Object.keys(outputPaths).length : "—") },
-    { label: "Artifact groups", value: String(metadataArtifacts ? Object.keys(metadataArtifacts).length : "—") },
-    { label: "Present files", value: String(artifactsPresent.length || "—") },
-  ];
-
   const primarySplitEntries = Object.entries(asRecord(primaryEvaluation?.splits) ?? {}).flatMap(
     ([split, metrics]) => {
       const metricRecord = asRecord(metrics);
@@ -827,9 +1011,35 @@ export function ModelDashboardPanel({
     { label: "Files present", value: String(artifactsPresent.length || "—") },
   ];
 
+  const handleArtefactsAndChartsClick = (section: DashboardSectionSummary) => {
+    if (section.id === "summary") {
+      onOpenModelInfo();
+      return;
+    }
+
+    if (section.id === "metadata") {
+      scrollToSection(metadataRef);
+      return;
+    }
+
+    if (section.id === "samples" && section.status === "missing") {
+      setOpenChartSectionId(section.id);
+      return;
+    }
+
+    if (section.id === "evaluation" || section.id === "benchmark" || section.id === "cross_dataset" || section.id === "samples") {
+      scrollToSection(evaluationRef);
+      return;
+    }
+
+    if (chartIndicatorById.has(section.id)) {
+      setOpenChartSectionId(section.id);
+    }
+  };
+
   return (
     <div className="models-dashboard__shell">
-      <article className="dashboard-block models-dashboard__hero-card">
+      <article ref={overviewRef} className="dashboard-block models-dashboard__hero-card">
         <div className="dashboard-block__header models-dashboard__hero-header">
           <div>
             <div className="dashboard-block__title-row">
@@ -868,39 +1078,11 @@ export function ModelDashboardPanel({
           </div>
         ) : null}
 
-        <div className="models-dashboard__coverage">
-          <div className="models-dashboard__coverage-header">
-            <div>
-              <div className="dashboard-block__eyebrow">Coverage</div>
-            </div>
-            <div className="dashboard-chip-row">
-              {sectionCounts.available ? (
-                <span className="dashboard-mini-chip">Available {sectionCounts.available}</span>
-              ) : null}
-              {sectionCounts.image_only ? (
-                <span className="dashboard-mini-chip">Partial {sectionCounts.image_only}</span>
-              ) : null}
-              {sectionCounts.missing ? (
-                <span className="dashboard-mini-chip">Missing {sectionCounts.missing}</span>
-              ) : null}
-              {sectionCounts.not_applicable ? (
-                <span className="dashboard-mini-chip">N/A {sectionCounts.not_applicable}</span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="models-dashboard__section-grid">
-            {manifestSections.map((section) => (
-              <div key={section.id} className="models-dashboard__section-item">
-                <span className={`status-chip status-chip--${section.status} models-dashboard__section-status`}>
-                  {humanizeStatus(section.status)}
-                </span>
-                <strong>{section.title}</strong>
-                <p>{section.reason ?? section.description ?? "No notes attached."}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+        {metadataModel ? (
+          <DashboardDetail title="Model metadata JSON" meta="raw">
+            <pre className="dashboard-kv__code">{stringifyStructuredValue(metadataModel)}</pre>
+          </DashboardDetail>
+        ) : null}
 
         {notes.length ? (
           <DashboardDetail title="Notes" meta={`${notes.length} item${notes.length === 1 ? "" : "s"}`}>
@@ -915,8 +1097,56 @@ export function ModelDashboardPanel({
         ) : null}
       </article>
 
+      <article className="dashboard-block models-dashboard__panel models-dashboard__panel--coverage">
+        <div className="dashboard-block__header models-dashboard__coverage-header">
+          <div>
+            <div className="dashboard-block__title-row">
+              <div className="dashboard-block__eyebrow">Artefacts &amp; Charts</div>
+              <DashboardHeaderInfo
+                label="About Artefacts and Charts"
+                text="Quick access to linked artifacts, charts, and dashboard sections without leaving the model overview."
+              />
+            </div>
+          </div>
+          <div className="dashboard-chip-row">
+            {sectionCounts.available ? (
+              <span className="dashboard-mini-chip">Available {sectionCounts.available}</span>
+            ) : null}
+            {sectionCounts.image_only ? (
+              <span className="dashboard-mini-chip">Partial {sectionCounts.image_only}</span>
+            ) : null}
+            {sectionCounts.missing ? (
+              <span className="dashboard-mini-chip">Missing {sectionCounts.missing}</span>
+            ) : null}
+            {sectionCounts.not_applicable ? (
+              <span className="dashboard-mini-chip">N/A {sectionCounts.not_applicable}</span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="models-dashboard__section-grid">
+          {artefactsAndChartsSections.map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              className={`models-dashboard__section-item models-dashboard__section-item--${section.status}`}
+              onClick={() => handleArtefactsAndChartsClick(section)}
+            >
+              <span className={`status-chip status-chip--${section.status} models-dashboard__section-status`}>
+                {humanizeStatus(section.status)}
+              </span>
+              <strong>{formatCoverageSectionTitle(section)}</strong>
+              <p>{formatCoverageSectionDescription(section)}</p>
+            </button>
+          ))}
+        </div>
+      </article>
+
       <div className="models-dashboard__body">
-        <article className="dashboard-block models-dashboard__panel models-dashboard__panel--balanced models-dashboard__panel--evaluation">
+        <article
+          ref={evaluationRef}
+          className="dashboard-block models-dashboard__panel models-dashboard__panel--balanced models-dashboard__panel--evaluation"
+        >
           <div className="dashboard-block__header">
             <div>
               <div className="dashboard-block__title-row">
@@ -1064,171 +1294,70 @@ export function ModelDashboardPanel({
             ) : null}
           </div>
         </article>
-
-        <article className="dashboard-block models-dashboard__panel models-dashboard__panel--balanced models-dashboard__panel--metadata">
-          <div className="dashboard-block__header">
-            <div>
-              <div className="dashboard-block__title-row">
-                <div className="dashboard-block__eyebrow">Metadata</div>
-                <DashboardHeaderInfo
-                  label="About Metadata"
-                  text="Operational fields stay structured up front; raw config remains tucked inside code panels."
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="models-dashboard__panel-grid models-dashboard__panel-grid--compact">
-            <div className="models-dashboard__subpanel models-dashboard__subpanel--compact models-dashboard__subpanel--metadata-core">
-              <div className="models-dashboard__subpanel-header">
-                <div className="dashboard-block__eyebrow">Core</div>
-                <h4>Model identity</h4>
-              </div>
-
-              <div className="models-dashboard__metadata-grid models-dashboard__metadata-grid--compact models-dashboard__metadata-grid--core">
-                {metadataCoreFacts.map((fact) => (
-                  <div key={fact.label} className={metadataFactClass(fact.label, "core")}>
-                    <span>{fact.label}</span>
-                    <strong>{fact.value}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="models-dashboard__subpanel models-dashboard__subpanel--compact models-dashboard__subpanel--metadata-runtime">
-              <div className="models-dashboard__subpanel-header">
-                <div className="dashboard-block__eyebrow">Runtime</div>
-                <h4>Execution profile</h4>
-              </div>
-
-              <div className="models-dashboard__metadata-grid models-dashboard__metadata-grid--compact models-dashboard__metadata-grid--runtime">
-                {metadataRuntimeFacts.map((fact) => (
-                  <div key={fact.label} className={metadataFactClass(fact.label, "runtime")}>
-                    <span>{fact.label}</span>
-                    <strong>{fact.value}</strong>
-                  </div>
-                ))}
-              </div>
-
-              <div className="models-dashboard__metadata-grid models-dashboard__metadata-grid--compact models-dashboard__metadata-grid--summary">
-                {metadataSummaryFacts.map((fact) => (
-                  <div
-                    key={fact.label}
-                    className={`${metadataFactClass(fact.label, "summary")} models-dashboard__mini-fact--muted`}
-                  >
-                    <span>{fact.label}</span>
-                    <strong>{fact.value}</strong>
-                  </div>
-                ))}
-              </div>
-
-              {labelClasses.length ? (
-                <div className="dashboard-chip-row models-dashboard__label-row models-dashboard__label-row--metadata">
-                  {labelClasses.map((label) => (
-                    <span key={String(label.id ?? label.name)} className="dashboard-mini-chip models-dashboard__label-chip">
-                      {String(label.display_name ?? label.name ?? label.id)}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="models-dashboard__detail-stack models-dashboard__detail-stack--compact">
-            {metadataModel ? (
-              <DashboardDetail title="Model metadata JSON" meta="raw" className="models-dashboard__detail--metadata">
-                <pre className="dashboard-kv__code">{stringifyStructuredValue(metadataModel)}</pre>
-              </DashboardDetail>
-            ) : null}
-
-            {experimentConfig ? (
-              <DashboardDetail title="Experiment config" meta="raw" className="models-dashboard__detail--metadata">
-                <pre className="dashboard-kv__code">{stringifyStructuredValue(experimentConfig)}</pre>
-              </DashboardDetail>
-            ) : null}
-
-            {outputPaths ? (
-              <DashboardDetail
-                title="Output paths"
-                meta={`${Object.keys(outputPaths).length} path${Object.keys(outputPaths).length === 1 ? "" : "s"}`}
-                className="models-dashboard__detail--metadata"
-              >
-                <pre className="dashboard-kv__code">{stringifyStructuredValue(outputPaths)}</pre>
-              </DashboardDetail>
-            ) : null}
-          </div>
-        </article>
       </div>
 
-      <article className="dashboard-block models-dashboard__panel models-dashboard__panel--wide">
+      <article
+        ref={metadataRef}
+        className="dashboard-block models-dashboard__panel models-dashboard__panel--wide models-dashboard__panel--traceability"
+      >
         <div className="dashboard-block__header">
           <div>
             <div className="dashboard-block__title-row">
-              <div className="dashboard-block__eyebrow">Charts</div>
+              <div className="dashboard-block__eyebrow">Metadata</div>
               <DashboardHeaderInfo
-                label="About Charts"
-                text="Open each visual in a dedicated overlay so heavy plots stay out of the main dashboard flow."
+                label="About Metadata"
+                text="Metadata, provenance, artifact counts, and technical path groups for the generated dashboard bundle."
               />
             </div>
           </div>
         </div>
 
-        {chartIndicators.length ? (
-          <div className="models-dashboard__chart-indicator-grid">
-            {chartIndicators.map((indicator) => (
-              <button
-                key={indicator.id}
-                type="button"
-                className={`models-dashboard__chart-indicator models-dashboard__chart-indicator--${indicator.kind}`}
-                onClick={() => setOpenChartSectionId(indicator.id)}
-              >
-                <div className="models-dashboard__chart-indicator-topline">
-                  {indicator.kind !== "missing" ? (
-                    <span className={`models-dashboard__chart-kind models-dashboard__chart-kind--${indicator.kind}`}>
-                      {chartKindLabel(indicator.kind)}
-                    </span>
-                  ) : null}
-                  <span className={`status-chip status-chip--${indicator.status}`}>
-                    {humanizeStatus(indicator.status)}
-                  </span>
-                </div>
-                <strong>{indicator.title}</strong>
-                <p>{indicator.descriptionText}</p>
-                <div className="models-dashboard__chart-indicator-footer">
-                  <span className="dashboard-mini-chip">{indicator.metaLabel}</span>
-                  <span className="models-dashboard__chart-indicator-action">{indicator.actionLabel}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="dashboard-empty">
-            <strong>No visual artifacts attached.</strong>
-            <p>Plotly figures, confusion matrices, and exported charts will appear here when available.</p>
-          </div>
-        )}
-      </article>
+        <div className="models-dashboard__detail-stack models-dashboard__detail-stack--traceability">
+          <DashboardDetail
+            title="Provenance"
+            meta={`${selectedSources.length} source${selectedSources.length === 1 ? "" : "s"}`}
+            className="models-dashboard__detail--traceability models-dashboard__detail--traceability-sources"
+          >
+            {selectedSourcePreview.length ? (
+              <div className="source-list models-dashboard__source-preview models-dashboard__source-list--preview">
+                {selectedSourcePreview.map((source) => (
+                  <div key={`${source.category}-${source.path}`} className={traceabilitySourceItemClass(source.category)}>
+                    <span>{source.category}</span>
+                    <strong>{source.path}</strong>
+                    <p>{source.reason ?? "No reason attached."}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="dashboard-empty">
+                <strong>No selected source records were attached.</strong>
+              </div>
+            )}
+          </DashboardDetail>
 
-      <article className="dashboard-block models-dashboard__panel models-dashboard__panel--wide models-dashboard__panel--traceability">
-        <div className="dashboard-block__header">
-          <div>
-            <div className="dashboard-block__title-row">
-              <div className="dashboard-block__eyebrow">Sources / Artifacts</div>
-              <DashboardHeaderInfo
-                label="About Sources and Artifacts"
-                text="Counts, provenance, and path groups stay compact up front; long technical payloads remain collapsible."
-              />
-            </div>
-          </div>
-        </div>
+          {selectedSources.length > 3 ? (
+            <DashboardDetail
+              title="All selected sources"
+              meta={`${selectedSources.length} source${selectedSources.length === 1 ? "" : "s"}`}
+              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-sources"
+            >
+              <div className="source-list models-dashboard__source-list--detail">
+                {selectedSources.map((source) => (
+                  <div key={`${source.category}-${source.path}`} className={traceabilitySourceItemClass(source.category)}>
+                    <span>{source.category}</span>
+                    <strong>{source.path}</strong>
+                    <p>{source.reason ?? "No reason attached."}</p>
+                  </div>
+                ))}
+              </div>
+            </DashboardDetail>
+          ) : null}
 
-        <div className="models-dashboard__provenance-grid models-dashboard__provenance-grid--compact">
-          <div className="models-dashboard__subpanel models-dashboard__subpanel--compact models-dashboard__subpanel--traceability-inventory">
-            <div className="models-dashboard__subpanel-header">
-              <div className="dashboard-block__eyebrow">Audit</div>
-              <h4>Artifact inventory</h4>
-            </div>
-
+          <DashboardDetail
+            title="Audit"
+            meta={`${artifactCountEntries.length} group${artifactCountEntries.length === 1 ? "" : "s"}`}
+            className="models-dashboard__detail--traceability models-dashboard__detail--traceability-paths"
+          >
             {artifactCountEntries.length ? (
               <>
                 <div className="models-dashboard__mini-fact models-dashboard__mini-fact--hero models-dashboard__mini-fact--traceability-total">
@@ -1248,66 +1377,7 @@ export function ModelDashboardPanel({
                 <strong>No source audit counts attached.</strong>
               </div>
             )}
-          </div>
-
-          <div className="models-dashboard__subpanel models-dashboard__subpanel--compact models-dashboard__subpanel--traceability-sources">
-            <div className="models-dashboard__subpanel-header">
-              <div className="dashboard-block__eyebrow">Provenance</div>
-              <h4>Selected sources</h4>
-            </div>
-
-            {selectedSourcePreview.length ? (
-              <div className="source-list models-dashboard__source-preview models-dashboard__source-list--preview">
-                {selectedSourcePreview.map((source) => (
-                  <div key={`${source.category}-${source.path}`} className={traceabilitySourceItemClass(source.category)}>
-                    <span>{source.category}</span>
-                    <strong>{source.path}</strong>
-                    <p>{source.reason ?? "No reason attached."}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="dashboard-empty">
-                <strong>No selected source records were attached.</strong>
-              </div>
-            )}
-          </div>
-
-          <div className="models-dashboard__subpanel models-dashboard__subpanel--compact models-dashboard__subpanel--traceability-bundles">
-            <div className="models-dashboard__subpanel-header">
-              <div className="dashboard-block__eyebrow">Bundles</div>
-              <h4>Technical groups</h4>
-            </div>
-
-            <div className="models-dashboard__metadata-grid models-dashboard__metadata-grid--compact models-dashboard__metadata-grid--technical">
-              {sourceBundleFacts.map((fact) => (
-                <div key={fact.label} className="models-dashboard__mini-fact models-dashboard__mini-fact--traceability-bundle">
-                  <span>{fact.label}</span>
-                  <strong>{fact.value}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="models-dashboard__detail-stack models-dashboard__detail-stack--traceability">
-          {selectedSources.length > 3 ? (
-            <DashboardDetail
-              title="All selected sources"
-              meta={`${selectedSources.length} source${selectedSources.length === 1 ? "" : "s"}`}
-              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-sources"
-            >
-              <div className="source-list models-dashboard__source-list--detail">
-                {selectedSources.map((source) => (
-                  <div key={`${source.category}-${source.path}`} className={traceabilitySourceItemClass(source.category)}>
-                    <span>{source.category}</span>
-                    <strong>{source.path}</strong>
-                    <p>{source.reason ?? "No reason attached."}</p>
-                  </div>
-                ))}
-              </div>
-            </DashboardDetail>
-          ) : null}
+          </DashboardDetail>
 
           {artifactPaths ? (
             <DashboardDetail
@@ -1319,16 +1389,6 @@ export function ModelDashboardPanel({
             </DashboardDetail>
           ) : null}
 
-          {metadataArtifacts ? (
-            <DashboardDetail
-              title="Model artifacts"
-              meta={`${Object.keys(metadataArtifacts).length} group${Object.keys(metadataArtifacts).length === 1 ? "" : "s"}`}
-              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-artifacts"
-            >
-              <pre className="dashboard-kv__code">{stringifyStructuredValue(metadataArtifacts)}</pre>
-            </DashboardDetail>
-          ) : null}
-
           {artifactsPresent.length ? (
             <DashboardDetail
               title="Artifacts present"
@@ -1336,6 +1396,31 @@ export function ModelDashboardPanel({
               className="models-dashboard__detail--traceability models-dashboard__detail--traceability-present"
             >
               <pre className="dashboard-kv__code">{stringifyStructuredValue(artifactsPresent)}</pre>
+            </DashboardDetail>
+          ) : null}
+
+          <DashboardDetail
+            title="Bundles"
+            meta={`${sourceBundleFacts.length} fact${sourceBundleFacts.length === 1 ? "" : "s"}`}
+            className="models-dashboard__detail--traceability models-dashboard__detail--traceability-artifacts"
+          >
+            <div className="models-dashboard__metadata-grid models-dashboard__metadata-grid--compact models-dashboard__metadata-grid--technical">
+              {sourceBundleFacts.map((fact) => (
+                <div key={fact.label} className="models-dashboard__mini-fact models-dashboard__mini-fact--traceability-bundle">
+                  <span>{fact.label}</span>
+                  <strong>{fact.value}</strong>
+                </div>
+              ))}
+            </div>
+          </DashboardDetail>
+
+          {metadataArtifacts ? (
+            <DashboardDetail
+              title="Model artifacts"
+              meta={`${Object.keys(metadataArtifacts).length} group${Object.keys(metadataArtifacts).length === 1 ? "" : "s"}`}
+              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-artifacts"
+            >
+              <pre className="dashboard-kv__code">{stringifyStructuredValue(metadataArtifacts)}</pre>
             </DashboardDetail>
           ) : null}
 
@@ -1374,28 +1459,25 @@ export function ModelDashboardPanel({
                   tabIndex={-1}
                 >
                   <div className="models-dashboard__chart-dialog-header">
-                    <div>
-                      <div className="dashboard-block__eyebrow">Charts</div>
-                      <div className="dashboard-block__title-row">
-                        <h3 id="model-dashboard-chart-title">{openChartIndicator.title}</h3>
-                        <DashboardHeaderInfo
-                          label={`About ${openChartIndicator.title}`}
-                          text={openChartIndicator.descriptionText}
-                        />
-                      </div>
+                    <div className="models-dashboard__chart-dialog-title">
+                      <h3 id="model-dashboard-chart-title">{openChartIndicator.title}</h3>
+                      <DashboardHeaderInfo
+                        label={`About ${openChartIndicator.title}`}
+                        text={openChartIndicator.descriptionText}
+                      />
                     </div>
 
                     <div className="models-dashboard__chart-dialog-actions">
-                      {openChartIndicator.kind !== "missing" ? (
+                      <span className={`status-chip status-chip--${openChartIndicator.status}`}>
+                        {humanizeStatus(openChartIndicator.status)}
+                      </span>
+                      {openChartIndicator.kind === "plotly" ? (
                         <span
                           className={`models-dashboard__chart-kind models-dashboard__chart-kind--${openChartIndicator.kind}`}
                         >
                           {chartKindLabel(openChartIndicator.kind)}
                         </span>
                       ) : null}
-                      <span className={`status-chip status-chip--${openChartIndicator.status}`}>
-                        {humanizeStatus(openChartIndicator.status)}
-                      </span>
                       <button
                         type="button"
                         className="mini-button models-dashboard__chart-close"
@@ -1423,27 +1505,215 @@ export function ModelDashboardPanel({
                       </div>
                     ) : (
                       <div className="models-dashboard__chart-modal-body">
+                        <div className="models-dashboard__chart-preview-summary">
+                          <span className="dashboard-mini-chip">
+                            {summarizeChartAssets(openChartIndicator)}
+                          </span>
+                          {openChartIndicator.figures.length ? (
+                            <span className="dashboard-mini-chip">
+                              {openChartIndicator.figures.reduce(
+                                (total, figure) => total + countFigureTraces(figure),
+                                0,
+                              )}{" "}
+                              trace
+                              {openChartIndicator.figures.reduce(
+                                (total, figure) => total + countFigureTraces(figure),
+                                0,
+                              ) === 1
+                                ? ""
+                                : "s"}
+                            </span>
+                          ) : null}
+                          {openChartIndicator.images.length ? (
+                            <span className="dashboard-mini-chip">
+                              {openChartIndicator.images.length} preview image
+                              {openChartIndicator.images.length === 1 ? "" : "s"}
+                            </span>
+                          ) : null}
+                        </div>
+
                         {openChartIndicator.figures.length ? (
-                          <div className="models-dashboard__chart-modal-figures">
+                          <div className="models-dashboard__chart-preview-grid">
                             {openChartIndicator.figures.map((figure) => (
-                              <PlotlyFigure key={figure.id} figure={figure} variant="modal" />
+                              <article key={figure.id} className="models-dashboard__chart-preview-card">
+                                <div className="plotly-card__eyebrow">Plotly figure</div>
+                                <strong>{figure.title ?? figure.id}</strong>
+                                <p>{summarizeFigureTraceKinds(figure)}</p>
+                                <div className="dashboard-chip-row">
+                                  <span className="dashboard-mini-chip">
+                                    {countFigureTraces(figure)} trace
+                                    {countFigureTraces(figure) === 1 ? "" : "s"}
+                                  </span>
+                                  <span className="dashboard-mini-chip">{figure.id}</span>
+                                </div>
+                              </article>
                             ))}
                           </div>
                         ) : null}
 
                         {openChartIndicator.images.length ? (
-                          <div className="models-dashboard__chart-modal-images">
+                          <div className="models-dashboard__chart-preview-grid models-dashboard__chart-preview-grid--images">
                             {openChartIndicator.images.map((image) => (
-                              <figure key={image.path} className="dashboard-image-card">
+                              <figure key={image.path} className="dashboard-image-card models-dashboard__chart-preview-image">
                                 <img src={image.url} alt={image.title} />
                                 <figcaption>{image.title}</figcaption>
                               </figure>
                             ))}
                           </div>
                         ) : null}
+
+                        <div className="models-dashboard__chart-preview-actions">
+                          <button
+                            type="button"
+                            className="primary-button"
+                            onClick={() => openChartViewer(openChartIndicator.id)}
+                          >
+                            Open full-screen viewer
+                          </button>
+                          <button
+                            type="button"
+                            className="mini-button"
+                            onClick={closeChartModal}
+                          >
+                            Keep browsing dashboard
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {openChartViewerIndicator && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="models-dashboard__viewer-modal"
+              role="presentation"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) {
+                  closeChartViewer();
+                }
+              }}
+            >
+              <div
+                ref={chartViewerRef}
+                className="models-dashboard__viewer-shell"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="model-dashboard-viewer-title"
+                tabIndex={-1}
+              >
+                <div className="models-dashboard__viewer-header">
+                  <div>
+                    <div className="dashboard-block__title-row">
+                      <h3 id="model-dashboard-viewer-title">{openChartViewerIndicator.title}</h3>
+                      <DashboardHeaderInfo
+                        label={`About ${openChartViewerIndicator.title} viewer`}
+                        text={openChartViewerIndicator.descriptionText}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="models-dashboard__viewer-actions">
+                    <span className="dashboard-mini-chip">
+                      {summarizeChartAssets(openChartViewerIndicator)}
+                    </span>
+                    <span className={`status-chip status-chip--${openChartViewerIndicator.status}`}>
+                      {humanizeStatus(openChartViewerIndicator.status)}
+                    </span>
+                    <button
+                      type="button"
+                      className="mini-button models-dashboard__viewer-close"
+                      onClick={closeChartViewer}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+
+                <div ref={chartViewerBodyRef} className="models-dashboard__viewer-body">
+                  {openChartViewerIndicator.reason ? (
+                    <div className="dashboard-footnote">{openChartViewerIndicator.reason}</div>
+                  ) : null}
+
+                  {openChartViewerIndicator.figures.length ? (
+                    <div className="models-dashboard__viewer-figures">
+                      {openChartViewerIndicator.figures.map((figure) => (
+                        <PlotlyFigure key={figure.id} figure={figure} variant="viewer" />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {viewerHasImageGallery && activeViewerImage ? (
+                    <div className="models-dashboard__viewer-gallery">
+                      {viewerImageCount > 1 ? (
+                        <div className="models-dashboard__viewer-gallery-controls">
+                          <button
+                            type="button"
+                            className="mini-button"
+                            onClick={showPreviousViewerImage}
+                          >
+                            Previous
+                          </button>
+                          <span className="dashboard-mini-chip">
+                            {chartViewerImageIndex + 1} / {viewerImageCount}
+                          </span>
+                          <button
+                            type="button"
+                            className="mini-button"
+                            onClick={showNextViewerImage}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      ) : null}
+
+                      <figure className="dashboard-image-card models-dashboard__viewer-gallery-figure">
+                        <img
+                          className="models-dashboard__viewer-gallery-media"
+                          src={activeViewerImage.url}
+                          alt={activeViewerImage.title}
+                        />
+                        <figcaption>{activeViewerImage.title}</figcaption>
+                      </figure>
+
+                      {viewerImageCount > 1 ? (
+                        <div className="models-dashboard__viewer-gallery-strip">
+                          {openChartViewerIndicator.images.map((image, index) => (
+                            <button
+                              key={image.path}
+                              type="button"
+                              className={`models-dashboard__viewer-gallery-thumb${
+                                index === chartViewerImageIndex
+                                  ? " models-dashboard__viewer-gallery-thumb--active"
+                                  : ""
+                              }`}
+                              onClick={() => setChartViewerImageIndex(index)}
+                              aria-label={`Show ${image.title}`}
+                            >
+                              <img src={image.url} alt={image.title} />
+                              <span>{image.title}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {openChartViewerIndicator.images.length && !viewerHasImageGallery ? (
+                    <div className="models-dashboard__viewer-images">
+                      {openChartViewerIndicator.images.map((image) => (
+                        <figure key={image.path} className="dashboard-image-card">
+                          <img src={image.url} alt={image.title} />
+                          <figcaption>{image.title}</figcaption>
+                        </figure>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>,

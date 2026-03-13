@@ -33,6 +33,36 @@ function familyLabel(model: DomainCatalogModel) {
   return model.framework_type;
 }
 
+function asRecord(value: unknown) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function toRecordArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object")
+    : [];
+}
+
+function formatOutputType(value?: string | null, compact = false) {
+  if (!value) {
+    return "—";
+  }
+
+  const normalized = value.toLowerCase();
+  if (normalized === "single-label-classification") {
+    return compact ? "single-label:" : "single-label";
+  }
+
+  const humanized = value.replace(/_/g, " ").replace(/-/g, " ");
+  return compact ? `${humanized}:` : humanized;
+}
+
+function modelInfoChipTone(index: number) {
+  return ["aurora", "cyan", "gold", "rose"][index % 4];
+}
+
 function moveModelIdOneStep(modelIds: string[], modelId: string, direction: -1 | 1) {
   const index = modelIds.indexOf(modelId);
   const targetIndex = index + direction;
@@ -102,6 +132,11 @@ export function ModelsPage() {
   );
 
   const selectedDashboard = selectedModelId ? dashboardCache[selectedModelId] ?? null : null;
+  const modelInfoDashboard = modelInfoId ? dashboardCache[modelInfoId] ?? null : null;
+  const modelInfoMetadata = asRecord(modelInfoDashboard?.documents["metadata/model.json"]);
+  const modelInfoLabels = asRecord(modelInfoMetadata?.labels);
+  const modelInfoLabelClasses = toRecordArray(modelInfoLabels?.classes);
+  const modelInfoOutputType = String(modelInfoLabels?.type ?? modelInfo?.output_type ?? "");
 
   useEffect(() => {
     if (!models.length) {
@@ -184,6 +219,31 @@ export function ModelsPage() {
       cancelled = true;
     };
   }, [dashboardCache, managementReady, selectedModelId]);
+
+  useEffect(() => {
+    if (!managementReady || !modelInfoId || dashboardCache[modelInfoId]) {
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchModelDashboard(modelInfoId)
+      .then((dashboard) => {
+        if (!cancelled) {
+          setDashboardCache((current) => ({
+            ...current,
+            [modelInfoId]: dashboard,
+          }));
+        }
+      })
+      .catch(() => {
+        // Modal can fall back to manifest-level fields when dashboard metadata is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardCache, managementReady, modelInfoId]);
 
   const stats = useMemo(
     () => ({
@@ -582,7 +642,11 @@ export function ModelsPage() {
               <strong>Loading dashboard…</strong>
             </div>
           ) : selectedDashboard && selectedDashboard.available ? (
-            <ModelDashboardPanel model={selectedModel} dashboard={selectedDashboard} />
+            <ModelDashboardPanel
+              model={selectedModel}
+              dashboard={selectedDashboard}
+              onOpenModelInfo={() => setModelInfoId(selectedModel.model_id)}
+            />
           ) : (
             <div className="dashboard-empty">
               <strong>No dashboard attached to this model.</strong>
@@ -661,10 +725,6 @@ export function ModelsPage() {
               <div>
                 <div className="panel__eyebrow">Model Info</div>
                 <h3 id="model-info-modal-title">{modelInfo.display_name}</h3>
-                <p>
-                  Full manifest-level information for this model, separated from the compact card
-                  layout.
-                </p>
               </div>
               <button
                 type="button"
@@ -680,9 +740,7 @@ export function ModelsPage() {
                 {humanizeStatus(modelInfo.status)}
               </span>
               <span className="dashboard-mini-chip">{familyLabel(modelInfo)}</span>
-              <span className="dashboard-mini-chip">
-                priority: {modelInfo.priority}
-              </span>
+              <span className="dashboard-mini-chip">{modelInfo.priority}</span>
             </div>
 
             <div className="model-info-grid">
@@ -699,6 +757,10 @@ export function ModelsPage() {
                 <strong>{modelInfo.version ?? "—"}</strong>
               </div>
               <div className="model-info-item">
+                <span>Task</span>
+                <strong>{modelInfo.framework_task ?? "—"}</strong>
+              </div>
+              <div className="model-info-item">
                 <span>Library</span>
                 <strong>{modelInfo.framework_library ?? "—"}</strong>
               </div>
@@ -711,12 +773,34 @@ export function ModelsPage() {
                 <strong>{modelInfo.architecture ?? modelInfo.backbone ?? "—"}</strong>
               </div>
               <div className="model-info-item">
-                <span>Runtime device</span>
-                <strong>{modelInfo.runtime_device ?? "—"}</strong>
-              </div>
-              <div className="model-info-item">
                 <span>Max sequence length</span>
                 <strong>{modelInfo.runtime_max_sequence_length ?? "—"}</strong>
+              </div>
+              <div
+                className={`model-info-item model-info-item--output${
+                  modelInfoLabelClasses.length ? " model-info-item--wide" : ""
+                }`}
+              >
+                <span>Output</span>
+                {modelInfoLabelClasses.length ? (
+                  <div className="model-info-output">
+                    <strong className="model-info-output__label">
+                      {formatOutputType(modelInfoOutputType, true)}
+                    </strong>
+                    <div className="model-info-output__chips">
+                      {modelInfoLabelClasses.map((label, index) => (
+                        <span
+                          key={String(label.id ?? label.name ?? index)}
+                          className={`dashboard-mini-chip model-info-output__chip model-info-output__chip--${modelInfoChipTone(index)}`}
+                        >
+                          {String(label.display_name ?? label.name ?? label.id)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <strong>{formatOutputType(modelInfoOutputType)}</strong>
+                )}
               </div>
               <div className="model-info-item model-info-item--wide">
                 <span>Description</span>
