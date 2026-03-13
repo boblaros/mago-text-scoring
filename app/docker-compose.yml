@@ -11,6 +11,10 @@ services:
     volumes:
       - ./backend:/srv/app/backend
       - ./app-models:/srv/app/app-models
+      - ../abuse:/srv/abuse:ro
+      - ../age:/srv/age:ro
+      - ../complexity:/srv/complexity:ro
+      - ../sentiment:/srv/sentiment:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 

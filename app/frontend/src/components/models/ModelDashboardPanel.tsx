@@ -244,21 +244,6 @@ function buildPrimaryMetricCards(
     }
   });
 
-  if (benchmarkRows.length) {
-    const rankedRows = benchmarkRows
-      .filter((row) => numericValue(row.f1_macro) !== null)
-      .sort((left, right) => (numericValue(right.f1_macro) ?? 0) - (numericValue(left.f1_macro) ?? 0));
-    const productionRow = rankedRows.find((row) => row.is_production === true);
-    if (rankedRows.length && productionRow) {
-      const rank = rankedRows.findIndex((row) => row === productionRow) + 1;
-      cards.push({
-        label: "Benchmark rank",
-        value: `${rank}/${rankedRows.length}`,
-        hint: `${formatNumber(productionRow.f1_macro)} F1 macro`,
-      });
-    }
-  }
-
   if (crossDatasetRows.length) {
     const scores = crossDatasetRows
       .map((row) => numericValue(row.f1_macro) ?? numericValue(row.accuracy))
@@ -371,6 +356,23 @@ function DashboardDetail({
         {meta ? <strong>{meta}</strong> : null}
       </summary>
       <div className="models-dashboard__detail-body">{children}</div>
+    </details>
+  );
+}
+
+function DashboardHeaderInfo({
+  label,
+  text,
+}: {
+  label: string;
+  text: string;
+}) {
+  return (
+    <details className="dashboard-header__info">
+      <summary aria-label={label}>
+        <span>i</span>
+      </summary>
+      <div className="dashboard-header__popover">{text}</div>
     </details>
   );
 }
@@ -708,6 +710,10 @@ export function ModelDashboardPanel({
 
   const overviewFacts = [
     {
+      label: "Model",
+      value: String(model.display_name || model.model_id),
+    },
+    {
       label: "Domain",
       value: String(metadataUi?.domain_display_name ?? model.domain),
     },
@@ -826,8 +832,9 @@ export function ModelDashboardPanel({
       <article className="dashboard-block models-dashboard__hero-card">
         <div className="dashboard-block__header models-dashboard__hero-header">
           <div>
-            <div className="dashboard-block__eyebrow">Overview</div>
-            <h4>Operational snapshot</h4>
+            <div className="dashboard-block__title-row">
+              <div className="dashboard-block__eyebrow">Overview</div>
+            </div>
           </div>
 
           <div className="dashboard-chip-row">
@@ -865,7 +872,6 @@ export function ModelDashboardPanel({
           <div className="models-dashboard__coverage-header">
             <div>
               <div className="dashboard-block__eyebrow">Coverage</div>
-              <h4>Section availability</h4>
             </div>
             <div className="dashboard-chip-row">
               {sectionCounts.available ? (
@@ -913,9 +919,13 @@ export function ModelDashboardPanel({
         <article className="dashboard-block models-dashboard__panel models-dashboard__panel--balanced models-dashboard__panel--evaluation">
           <div className="dashboard-block__header">
             <div>
-              <div className="dashboard-block__eyebrow">Evaluation</div>
-              <h4>Metrics and comparisons</h4>
-              <p>Primary signals stay visible; deeper tables and samples stay folded until needed.</p>
+              <div className="dashboard-block__title-row">
+                <div className="dashboard-block__eyebrow">Evaluation</div>
+                <DashboardHeaderInfo
+                  label="About Evaluation"
+                  text="Primary signals stay visible; deeper tables and samples stay folded until needed."
+                />
+              </div>
             </div>
           </div>
 
@@ -1058,9 +1068,13 @@ export function ModelDashboardPanel({
         <article className="dashboard-block models-dashboard__panel models-dashboard__panel--balanced models-dashboard__panel--metadata">
           <div className="dashboard-block__header">
             <div>
-              <div className="dashboard-block__eyebrow">Metadata</div>
-              <h4>Inspector</h4>
-              <p>Operational fields stay structured up front; raw config remains tucked inside code panels.</p>
+              <div className="dashboard-block__title-row">
+                <div className="dashboard-block__eyebrow">Metadata</div>
+                <DashboardHeaderInfo
+                  label="About Metadata"
+                  text="Operational fields stay structured up front; raw config remains tucked inside code panels."
+                />
+              </div>
             </div>
           </div>
 
@@ -1149,9 +1163,13 @@ export function ModelDashboardPanel({
       <article className="dashboard-block models-dashboard__panel models-dashboard__panel--wide">
         <div className="dashboard-block__header">
           <div>
-            <div className="dashboard-block__eyebrow">Charts</div>
-            <h4>Visual diagnostics</h4>
-            <p>Open each visual in a dedicated overlay so heavy plots stay out of the main dashboard flow.</p>
+            <div className="dashboard-block__title-row">
+              <div className="dashboard-block__eyebrow">Charts</div>
+              <DashboardHeaderInfo
+                label="About Charts"
+                text="Open each visual in a dedicated overlay so heavy plots stay out of the main dashboard flow."
+              />
+            </div>
           </div>
         </div>
 
@@ -1165,9 +1183,11 @@ export function ModelDashboardPanel({
                 onClick={() => setOpenChartSectionId(indicator.id)}
               >
                 <div className="models-dashboard__chart-indicator-topline">
-                  <span className={`models-dashboard__chart-kind models-dashboard__chart-kind--${indicator.kind}`}>
-                    {chartKindLabel(indicator.kind)}
-                  </span>
+                  {indicator.kind !== "missing" ? (
+                    <span className={`models-dashboard__chart-kind models-dashboard__chart-kind--${indicator.kind}`}>
+                      {chartKindLabel(indicator.kind)}
+                    </span>
+                  ) : null}
                   <span className={`status-chip status-chip--${indicator.status}`}>
                     {humanizeStatus(indicator.status)}
                   </span>
@@ -1192,9 +1212,13 @@ export function ModelDashboardPanel({
       <article className="dashboard-block models-dashboard__panel models-dashboard__panel--wide models-dashboard__panel--traceability">
         <div className="dashboard-block__header">
           <div>
-            <div className="dashboard-block__eyebrow">Sources / Artifacts</div>
-            <h4>Traceability</h4>
-            <p>Counts, provenance, and path groups stay compact up front; long technical payloads remain collapsible.</p>
+            <div className="dashboard-block__title-row">
+              <div className="dashboard-block__eyebrow">Sources / Artifacts</div>
+              <DashboardHeaderInfo
+                label="About Sources and Artifacts"
+                text="Counts, provenance, and path groups stay compact up front; long technical payloads remain collapsible."
+              />
+            </div>
           </div>
         </div>
 
@@ -1352,16 +1376,23 @@ export function ModelDashboardPanel({
                   <div className="models-dashboard__chart-dialog-header">
                     <div>
                       <div className="dashboard-block__eyebrow">Charts</div>
-                      <h3 id="model-dashboard-chart-title">{openChartIndicator.title}</h3>
-                      <p>{openChartIndicator.descriptionText}</p>
+                      <div className="dashboard-block__title-row">
+                        <h3 id="model-dashboard-chart-title">{openChartIndicator.title}</h3>
+                        <DashboardHeaderInfo
+                          label={`About ${openChartIndicator.title}`}
+                          text={openChartIndicator.descriptionText}
+                        />
+                      </div>
                     </div>
 
                     <div className="models-dashboard__chart-dialog-actions">
-                      <span
-                        className={`models-dashboard__chart-kind models-dashboard__chart-kind--${openChartIndicator.kind}`}
-                      >
-                        {chartKindLabel(openChartIndicator.kind)}
-                      </span>
+                      {openChartIndicator.kind !== "missing" ? (
+                        <span
+                          className={`models-dashboard__chart-kind models-dashboard__chart-kind--${openChartIndicator.kind}`}
+                        >
+                          {chartKindLabel(openChartIndicator.kind)}
+                        </span>
+                      ) : null}
                       <span className={`status-chip status-chip--${openChartIndicator.status}`}>
                         {humanizeStatus(openChartIndicator.status)}
                       </span>

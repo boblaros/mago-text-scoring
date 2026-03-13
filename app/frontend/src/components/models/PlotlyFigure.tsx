@@ -72,11 +72,22 @@ function buildThemedFigure(source: Record<string, unknown>) {
   const layout = (source.layout ?? {}) as Record<string, unknown>;
   const font = (layout.font ?? {}) as Record<string, unknown>;
   const { width: _width, height: _height, ...layoutWithoutFixedSize } = layout;
+  const themedAxes = Object.fromEntries(
+    Object.entries(layoutWithoutFixedSize).map(([key, value]) => {
+      if (/^xaxis\d*$/.test(key)) {
+        return [key, buildThemedAxis(value, "x")];
+      }
+      if (/^yaxis\d*$/.test(key)) {
+        return [key, buildThemedAxis(value, "y")];
+      }
+      return [key, value];
+    }),
+  );
 
   return {
     data,
     layout: {
-      ...layoutWithoutFixedSize,
+      ...themedAxes,
       autosize: true,
       paper_bgcolor: "transparent",
       plot_bgcolor: "transparent",
@@ -85,25 +96,7 @@ function buildThemedFigure(source: Record<string, unknown>) {
         family: '"Sora", sans-serif',
         color: "#d9e2f1",
       },
-      margin: {
-        l: 56,
-        r: 18,
-        t: 52,
-        b: 46,
-        ...(typeof layout.margin === "object" && layout.margin !== null ? layout.margin : {}),
-      },
-      xaxis: {
-        ...(typeof layout.xaxis === "object" && layout.xaxis !== null ? layout.xaxis : {}),
-        color: "#c1cde0",
-        gridcolor: "rgba(154, 175, 194, 0.12)",
-        zerolinecolor: "rgba(154, 175, 194, 0.16)",
-      },
-      yaxis: {
-        ...(typeof layout.yaxis === "object" && layout.yaxis !== null ? layout.yaxis : {}),
-        color: "#c1cde0",
-        gridcolor: "rgba(154, 175, 194, 0.12)",
-        zerolinecolor: "rgba(154, 175, 194, 0.16)",
-      },
+      margin: buildThemedMargin(layout.margin),
     },
     config: {
       displaylogo: false,
@@ -116,6 +109,98 @@ function buildThemedFigure(source: Record<string, unknown>) {
       ],
       ...(typeof source.config === "object" && source.config !== null ? source.config : {}),
     },
+  };
+}
+
+function waitForNextFrame() {
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+}
+
+async function waitForVisiblePlotContainer(element: HTMLElement) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    await waitForNextFrame();
+    const { width, height } = element.getBoundingClientRect();
+    if (width > 0 && height > 0) {
+      return;
+    }
+  }
+}
+
+async function waitForPlotTypography() {
+  if (typeof document === "undefined" || !("fonts" in document)) {
+    return;
+  }
+
+  const fontSet = document.fonts;
+  try {
+    await Promise.allSettled([
+      fontSet.load('400 12px "Sora"'),
+      fontSet.load('600 12px "Sora"'),
+      fontSet.ready,
+    ]);
+  } catch {
+    // Plot rendering can proceed with fallback fonts if the custom face is unavailable.
+  }
+}
+
+function buildThemedMargin(source: unknown) {
+  const margin =
+    typeof source === "object" && source !== null ? (source as Record<string, unknown>) : {};
+
+  const numeric = (key: "l" | "r" | "t" | "b" | "pad", fallback: number) =>
+    typeof margin[key] === "number" ? margin[key] : fallback;
+
+  return {
+    ...margin,
+    l: Math.max(numeric("l", 0), 72),
+    r: Math.max(numeric("r", 0), 24),
+    t: Math.max(numeric("t", 0), 60),
+    b: Math.max(numeric("b", 0), 78),
+    pad: Math.max(numeric("pad", 0), 8),
+  };
+}
+
+function buildThemedAxis(source: unknown, axis: "x" | "y") {
+  const axisLayout =
+    typeof source === "object" && source !== null ? (source as Record<string, unknown>) : {};
+  const title =
+    typeof axisLayout.title === "object" && axisLayout.title !== null
+      ? (axisLayout.title as Record<string, unknown>)
+      : typeof axisLayout.title === "string"
+        ? { text: axisLayout.title }
+        : null;
+
+  return {
+    ...axisLayout,
+    automargin: true,
+    color: "#c1cde0",
+    gridcolor: "rgba(154, 175, 194, 0.12)",
+    zerolinecolor: "rgba(154, 175, 194, 0.16)",
+    tickfont: {
+      ...(typeof axisLayout.tickfont === "object" && axisLayout.tickfont !== null
+        ? (axisLayout.tickfont as Record<string, unknown>)
+        : {}),
+      color: "#c1cde0",
+    },
+    title: title
+      ? {
+          ...title,
+          standoff:
+            typeof title.standoff === "number"
+              ? Math.max(title.standoff, axis === "x" ? 18 : 14)
+              : axis === "x"
+                ? 18
+                : 14,
+          font: {
+            ...(typeof title.font === "object" && title.font !== null
+              ? (title.font as Record<string, unknown>)
+              : {}),
+            color: "#d9e2f1",
+          },
+        }
+      : axisLayout.title,
   };
 }
 
@@ -149,7 +234,12 @@ export function PlotlyFigure({
     let followUpFrameId: number | null = null;
 
     void loadPlotlyLibrary()
-      .then((plotly) => {
+      .then(async (plotly) => {
+        if (cancelled || !containerRef.current) {
+          return;
+        }
+        await waitForPlotTypography();
+        await waitForVisiblePlotContainer(containerRef.current);
         if (cancelled || !containerRef.current) {
           return;
         }
@@ -191,6 +281,7 @@ export function PlotlyFigure({
             if (cancelled || !containerRef.current) {
               return;
             }
+            setIsLoading(false);
             resizeHandler = () => {
               scheduleResize();
             };
@@ -204,7 +295,6 @@ export function PlotlyFigure({
               }
               resizeObserver.observe(containerRef.current);
             }
-            setIsLoading(false);
             scheduleResize();
           });
       })
@@ -248,11 +338,13 @@ export function PlotlyFigure({
       </div>
 
       {error ? <div className="inline-alert">{error}</div> : null}
-      {isLoading ? <div className="plotly-card__placeholder">Loading chart…</div> : null}
-      <div
-        ref={containerRef}
-        className={`plotly-card__canvas${isLoading ? " plotly-card__canvas--hidden" : ""}`}
-      />
+      <div className="plotly-card__stage">
+        {isLoading ? <div className="plotly-card__placeholder">Loading chart…</div> : null}
+        <div
+          ref={containerRef}
+          className={`plotly-card__canvas${isLoading ? " plotly-card__canvas--hidden" : ""}`}
+        />
+      </div>
     </article>
   );
 }
