@@ -162,3 +162,45 @@ def test_updating_model_activation_switches_home_model(tmp_path: Path) -> None:
     updated_models = {model["model_id"]: model for model in snapshot["management_domains"][0]["models"]}
     assert updated_models["sentiment-a"]["is_active"] is False
     assert updated_models["sentiment-b"]["is_active"] is True
+
+
+def test_dashboard_config_is_preserved_on_manifest_write(tmp_path: Path) -> None:
+    model_dir = tmp_path / "prod-model-demo"
+    model_dir.mkdir()
+    (model_dir / "model-config.yaml").write_text(
+        """
+model_id: "demo-model"
+domain: "demo"
+display_name: "Demo"
+is_active: true
+priority: 10
+framework:
+  type: "transformers"
+  task: "sequence-classification"
+artifacts:
+  weights:
+    - "model.safetensors"
+dashboard:
+  builder: "generic-v1"
+  sources:
+    primary_evaluation: "inputs/primary.json"
+labels:
+  type: "single-label-classification"
+  classes:
+    - id: 0
+      name: "neutral"
+""",
+        encoding="utf-8",
+    )
+    (model_dir / "model.safetensors").write_text("stub", encoding="utf-8")
+
+    settings = Settings(model_discovery_root=tmp_path)
+    registry = ModelRegistry(settings=settings, plugin_registry=InferencePluginRegistry())
+    registry.discover()
+
+    registry.update_model("demo-model", display_name="Demo Updated")
+
+    updated = yaml.safe_load((model_dir / "model-config.yaml").read_text(encoding="utf-8"))
+    assert updated["display_name"] == "Demo Updated"
+    assert updated["dashboard"]["builder"] == "generic-v1"
+    assert updated["dashboard"]["sources"]["primary_evaluation"] == "inputs/primary.json"

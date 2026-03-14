@@ -70,6 +70,7 @@ class ModelManifest(BaseModel):
     artifacts: ModelArtifacts = Field(default_factory=ModelArtifacts)
     model: dict[str, Any] = Field(default_factory=dict)
     runtime: ModelRuntime = Field(default_factory=ModelRuntime)
+    dashboard: dict[str, Any] = Field(default_factory=dict)
     label_type: str | None = None
     labels: list[LabelClass] | None = None
     inference: ModelInference = Field(default_factory=ModelInference)
@@ -88,6 +89,8 @@ class ModelManifest(BaseModel):
 
     def to_yaml_dict(self) -> dict[str, Any]:
         payload = self.model_dump(exclude_none=True)
+        if not payload.get("dashboard"):
+            payload.pop("dashboard", None)
         labels = payload.pop("labels", [])
         label_type = payload.pop("label_type", None)
         if label_type or labels:

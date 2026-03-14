@@ -27,6 +27,12 @@ The backend is not hardcoded to those four domains. It scans manifests, groups m
 - The active model is picked by `is_active` and `priority`, so a future admin/settings UI can switch models without changing inference code.
 - Inference backends are plugin-based: the current build ships a Hugging Face sequence-classification runner and a PyTorch BiLSTM+attention runner.
 
+## Dashboard builder
+
+- Existing dashboards still load from `model_dir/dashboard/dashboard-manifest.json`.
+- New config-driven dashboards can be built with `scripts/build_model_dashboard.py`.
+- The workflow and `model-config.yaml` shape are documented in [model-dashboard-workflow.md](/Users/georgijkutivadze/projects/mago-text-scoring/app/docs/model-dashboard-workflow.md).
+
 ## API
 
 - `GET /api/v1/health`

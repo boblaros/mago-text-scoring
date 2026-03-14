@@ -33,6 +33,49 @@ function familyLabel(model: DomainCatalogModel) {
   return model.framework_type;
 }
 
+function asRecord(value: unknown) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function toRecordArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> => item !== null && typeof item === "object")
+    : [];
+}
+
+function formatOutputType(value?: string | null, compact = false) {
+  if (!value) {
+    return "—";
+  }
+
+  const normalized = value.toLowerCase();
+  if (normalized === "single-label-classification") {
+    return compact ? "single-label:" : "single-label";
+  }
+
+  const humanized = value.replace(/_/g, " ").replace(/-/g, " ");
+  return compact ? `${humanized}:` : humanized;
+}
+
+function modelInfoChipTone(index: number) {
+  return ["aurora", "cyan", "gold", "rose"][index % 4];
+}
+
+function moveModelIdOneStep(modelIds: string[], modelId: string, direction: -1 | 1) {
+  const index = modelIds.indexOf(modelId);
+  const targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= modelIds.length) {
+    return null;
+  }
+
+  const nextIds = [...modelIds];
+  const [movedId] = nextIds.splice(index, 1);
+  nextIds.splice(targetIndex, 0, movedId);
+  return nextIds;
+}
+
 export function ModelsPage() {
   const {
     managementDomains,
@@ -79,8 +122,21 @@ export function ModelsPage() {
     () => models.find((model) => model.model_id === modelInfoId) ?? null,
     [modelInfoId, models],
   );
+  const activeModels = useMemo(
+    () => models.filter((model) => model.is_active),
+    [models],
+  );
+  const disabledModels = useMemo(
+    () => models.filter((model) => !model.is_active),
+    [models],
+  );
 
   const selectedDashboard = selectedModelId ? dashboardCache[selectedModelId] ?? null : null;
+  const modelInfoDashboard = modelInfoId ? dashboardCache[modelInfoId] ?? null : null;
+  const modelInfoMetadata = asRecord(modelInfoDashboard?.documents["metadata/model.json"]);
+  const modelInfoLabels = asRecord(modelInfoMetadata?.labels);
+  const modelInfoLabelClasses = toRecordArray(modelInfoLabels?.classes);
+  const modelInfoOutputType = String(modelInfoLabels?.type ?? modelInfo?.output_type ?? "");
 
   useEffect(() => {
     if (!models.length) {
@@ -164,6 +220,31 @@ export function ModelsPage() {
     };
   }, [dashboardCache, managementReady, selectedModelId]);
 
+  useEffect(() => {
+    if (!managementReady || !modelInfoId || dashboardCache[modelInfoId]) {
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchModelDashboard(modelInfoId)
+      .then((dashboard) => {
+        if (!cancelled) {
+          setDashboardCache((current) => ({
+            ...current,
+            [modelInfoId]: dashboard,
+          }));
+        }
+      })
+      .catch(() => {
+        // Modal can fall back to manifest-level fields when dashboard metadata is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardCache, managementReady, modelInfoId]);
+
   const stats = useMemo(
     () => ({
       totalModels: models.length,
@@ -200,16 +281,216 @@ export function ModelsPage() {
     }
   };
 
-  const moveModel = async (modelId: string, direction: -1 | 1) => {
-    const index = models.findIndex((model) => model.model_id === modelId);
-    const targetIndex = index + direction;
-    if (index < 0 || targetIndex < 0 || targetIndex >= models.length) {
+  const moveModelWithinSection = (model: DomainCatalogModel, direction: -1 | 1) => {
+    const sectionModels = model.is_active ? activeModels : disabledModels;
+    const sectionIds = sectionModels.map((sectionModel) => sectionModel.model_id);
+    const nextSectionIds = moveModelIdOneStep(sectionIds, model.model_id, direction);
+    if (!nextSectionIds) {
       return;
     }
-    const orderedIds = models.map((model) => model.model_id);
-    const [moved] = orderedIds.splice(index, 1);
-    orderedIds.splice(targetIndex, 0, moved);
-    await withModelAction(modelId, () => reorderModels({ ordered_model_ids: orderedIds }));
+
+    const orderedIds = model.is_active
+      ? [...nextSectionIds, ...disabledModels.map((sectionModel) => sectionModel.model_id)]
+      : [...activeModels.map((sectionModel) => sectionModel.model_id), ...nextSectionIds];
+
+    void withModelAction(model.model_id, () => reorderModels({ ordered_model_ids: orderedIds }));
+  };
+
+  const renderModelCard = (
+    model: DomainCatalogModel,
+    sectionIndex: number,
+    sectionLength: number,
+  ) => {
+    const theme = getDomainTheme({
+      domain: model.domain,
+      color_token: domainColorTokens[model.domain] ?? model.domain,
+    });
+    const isSelected = selectedModelId === model.model_id;
+    const isEditing = editingModelId === model.model_id;
+    const reorderDisabled = !managementReady || busyModelId !== null || editingModelId !== null;
+
+    return (
+      <article
+        key={model.model_id}
+        className={`model-row${isSelected ? " model-row--selected" : ""}`}
+        style={
+          {
+            "--model-accent": theme.accent,
+            "--model-glow": theme.glow,
+          } as CSSProperties
+        }
+        onClick={() => setSelectedModelId(model.model_id)}
+      >
+        <div className="model-row__topline">
+          <span className="model-row__domain">
+            {getCompactDomainLabel({
+              domain: model.domain,
+              display_name: domainDisplayNames[model.domain] ?? model.domain,
+            })}
+          </span>
+
+          <div className="model-row__topline-meta">
+            <div className="model-row__chips">
+              <span className={`status-chip status-chip--${model.is_active ? "available" : "missing"}`}>
+                {model.is_active ? "enabled" : "disabled"}
+              </span>
+              <span className={`status-chip status-chip--${model.status}`}>
+                {humanizeStatus(model.status)}
+              </span>
+            </div>
+
+            <div className="model-row__reorder-controls">
+              <button
+                type="button"
+                className="model-row__reorder-button"
+                aria-label={`Move ${model.display_name} left`}
+                title={`Move ${model.display_name} left`}
+                disabled={reorderDisabled || sectionIndex === 0}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  moveModelWithinSection(model, -1);
+                }}
+              >
+                &larr;
+              </button>
+              <button
+                type="button"
+                className="model-row__reorder-button"
+                aria-label={`Move ${model.display_name} right`}
+                title={`Move ${model.display_name} right`}
+                disabled={reorderDisabled || sectionIndex === sectionLength - 1}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  moveModelWithinSection(model, 1);
+                }}
+              >
+                &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+ 
+        <div className="model-row__body">
+          <div className="model-row__identity">
+            <div className="model-row__headline">
+              {isEditing ? (
+                <div className="inline-rename">
+                  <input
+                    value={renameDraft}
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                  <button
+                    type="button"
+                    className="mini-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void withModelAction(model.model_id, () =>
+                        updateModel(model.model_id, { display_name: renameDraft.trim() }),
+                      );
+                      setEditingModelId(null);
+                    }}
+                    disabled={!renameDraft.trim()}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="mini-button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setEditingModelId(null);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <h3>{model.display_name}</h3>
+              )}
+            </div>
+          </div>
+
+          {model.status === "missing_artifacts" && model.missing_artifacts.length ? (
+            <button
+              type="button"
+              className="model-row__warning-button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setArtifactIssueModelId(model.model_id);
+              }}
+            >
+              <span>Artifacts missing</span>
+              <strong>
+                {model.missing_artifacts.length} unresolved runtime path
+                {model.missing_artifacts.length === 1 ? "" : "s"}
+              </strong>
+            </button>
+          ) : model.status_reason ? (
+            <div className="model-row__warning">{model.status_reason}</div>
+          ) : null}
+        </div>
+
+        <div className="model-row__actions">
+          <button
+            className="mini-button"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setModelInfoId(model.model_id);
+            }}
+          >
+            Model info
+          </button>
+          <button
+            className="mini-button"
+            type="button"
+            disabled={!managementReady}
+            onClick={(event) => {
+              event.stopPropagation();
+              setEditingModelId(model.model_id);
+              setRenameDraft(model.display_name);
+            }}
+          >
+            Rename
+          </button>
+          <button
+            className="mini-button"
+            type="button"
+            disabled={
+              !managementReady ||
+              (!model.can_activate && !model.is_active) ||
+              busyModelId === model.model_id
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              void withModelAction(model.model_id, () =>
+                updateModel(model.model_id, { is_active: !model.is_active }),
+              );
+            }}
+          >
+            {model.is_active ? "Disable" : "Enable"}
+          </button>
+          <button
+            className="mini-button mini-button--danger"
+            type="button"
+            disabled={!managementReady || busyModelId === model.model_id}
+            onClick={(event) => {
+              event.stopPropagation();
+              const confirmed = window.confirm(
+                `Delete '${model.display_name}' and remove its local files from app/app-models?`,
+              );
+              if (!confirmed) {
+                return;
+              }
+              void withModelAction(model.model_id, () => deleteModelRequest(model.model_id));
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </article>
+    );
   };
 
   return (
@@ -217,7 +498,10 @@ export function ModelsPage() {
       <div className="panel models-hero">
         <div className="models-hero__copy">
           <div className="panel__eyebrow">Models</div>
-          <h1>Manage local models and inspect their dashboards from one workspace.</h1>
+          <h1>
+            Manage local <span className="about-hero__title-accent">models</span> and inspect
+            their <span className="about-hero__title-accent">dashboards</span> from one workspace.
+          </h1>
           <p>
             This page now drives the live registry. Enable, reorder, rename, delete, or upload
             models here and Home updates from the same catalog immediately.
@@ -248,13 +532,21 @@ export function ModelsPage() {
         <section className="panel models-management">
           <div className="models-management__header">
             <div>
-              <div className="panel__eyebrow">Model Management</div>
-              <h2>Registry control</h2>
-              <p>Local manifests, runtime status, artifact health, and Home sync live here.</p>
+              <div className="models-management__title-row">
+                <div className="panel__eyebrow">Model Management</div>
+                <details className="models-management__info">
+                  <summary aria-label="About Model Management">
+                    <span>i</span>
+                  </summary>
+                  <div className="models-management__popover">
+                    Local manifests, runtime status, artifact health, and Home sync live here.
+                  </div>
+                </details>
+              </div>
             </div>
 
             <button
-              className="primary-button"
+              className="primary-button models-management__upload-button"
               type="button"
               disabled={!managementReady}
               onClick={() => setIsUploadOpen(true)}
@@ -283,17 +575,6 @@ export function ModelsPage() {
             />
           ) : null}
 
-          <div className="management-subheader">
-            <div className="management-subheader__copy">
-              <span>Ordered registry</span>
-              <strong>Home reads this order from top to bottom.</strong>
-            </div>
-            <div className="dashboard-chip-row">
-              <span className="dashboard-mini-chip">Active: {stats.activeModels}</span>
-              <span className="dashboard-mini-chip">Ready: {stats.readyModels}</span>
-            </div>
-          </div>
-
           {isLoading && !models.length ? (
             <div className="dashboard-empty">
               <strong>Loading model registry…</strong>
@@ -308,193 +589,33 @@ export function ModelsPage() {
           ) : null}
 
           <div className="model-list">
-            {models.map((model, index) => {
-              const theme = getDomainTheme({
-                domain: model.domain,
-                color_token: domainColorTokens[model.domain] ?? model.domain,
-              });
-              const isSelected = selectedModelId === model.model_id;
-              const isEditing = editingModelId === model.model_id;
-              return (
-                <article
-                  key={model.model_id}
-                  className={`model-row${isSelected ? " model-row--selected" : ""}`}
-                  style={
-                    {
-                      "--model-accent": theme.accent,
-                      "--model-glow": theme.glow,
-                    } as CSSProperties
-                  }
-                  onClick={() => setSelectedModelId(model.model_id)}
-                >
-                  <div className="model-row__topline">
-                    <span className="model-row__domain">
-                      {getCompactDomainLabel({
-                        domain: model.domain,
-                        display_name: domainDisplayNames[model.domain] ?? model.domain,
-                      })}
-                    </span>
-                    <div className="model-row__chips">
-                      <span className={`status-chip status-chip--${model.is_active ? "available" : "missing"}`}>
-                        {model.is_active ? "live in Home" : "disabled"}
-                      </span>
-                      <span className={`status-chip status-chip--${model.status}`}>
-                        {humanizeStatus(model.status)}
-                      </span>
-                      <span className={`status-chip status-chip--${model.dashboard_status}`}>
-                        dashboard {model.dashboard_sections_available}/{model.dashboard_sections_total || 0}
-                      </span>
-                    </div>
+            {activeModels.length || !disabledModels.length ? (
+              <div className="model-list__section">
+                {disabledModels.length ? (
+                  <div className="model-list__section-header">
+                    <span>Active models</span>
+                    <strong>{activeModels.length}</strong>
                   </div>
+                ) : null}
+                <div className="model-list__grid">
+                  {activeModels.map((model, index) => renderModelCard(model, index, activeModels.length))}
+                </div>
+              </div>
+            ) : null}
 
-                  <div className="model-row__body">
-                    <div className="model-row__identity">
-                      {isEditing ? (
-                        <div className="inline-rename">
-                          <input
-                            value={renameDraft}
-                            onChange={(event) => setRenameDraft(event.target.value)}
-                            onClick={(event) => event.stopPropagation()}
-                          />
-                          <button
-                            type="button"
-                            className="mini-button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void withModelAction(model.model_id, () =>
-                                updateModel(model.model_id, { display_name: renameDraft.trim() }),
-                              );
-                              setEditingModelId(null);
-                            }}
-                            disabled={!renameDraft.trim()}
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            className="mini-button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setEditingModelId(null);
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <h3>{model.display_name}</h3>
-                        </>
-                      )}
-                    </div>
-
-                    {model.status === "missing_artifacts" && model.missing_artifacts.length ? (
-                      <button
-                        type="button"
-                        className="model-row__warning-button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setArtifactIssueModelId(model.model_id);
-                        }}
-                      >
-                        <span>Artifacts missing</span>
-                        <strong>
-                          {model.missing_artifacts.length} unresolved runtime path
-                          {model.missing_artifacts.length === 1 ? "" : "s"}
-                        </strong>
-                      </button>
-                    ) : model.status_reason ? (
-                      <div className="model-row__warning">{model.status_reason}</div>
-                    ) : null}
-                  </div>
-
-                  <div className="model-row__actions">
-                    <button
-                      className="mini-button"
-                      type="button"
-                      disabled={!managementReady || index === 0 || busyModelId === model.model_id}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void moveModel(model.model_id, -1);
-                      }}
-                    >
-                      Move up
-                    </button>
-                    <button
-                      className="mini-button"
-                      type="button"
-                      disabled={
-                        !managementReady ||
-                        index === models.length - 1 ||
-                        busyModelId === model.model_id
-                      }
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void moveModel(model.model_id, 1);
-                      }}
-                    >
-                      Move down
-                    </button>
-                    <button
-                      className="mini-button"
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setModelInfoId(model.model_id);
-                      }}
-                    >
-                      Model info
-                    </button>
-                    <button
-                      className="mini-button"
-                      type="button"
-                      disabled={!managementReady}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setEditingModelId(model.model_id);
-                        setRenameDraft(model.display_name);
-                      }}
-                    >
-                      Rename
-                    </button>
-                    <button
-                      className="mini-button"
-                      type="button"
-                      disabled={
-                        !managementReady ||
-                        (!model.can_activate && !model.is_active) ||
-                        busyModelId === model.model_id
-                      }
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void withModelAction(model.model_id, () =>
-                          updateModel(model.model_id, { is_active: !model.is_active }),
-                        );
-                      }}
-                    >
-                      {model.is_active ? "Disable" : "Enable"}
-                    </button>
-                    <button
-                      className="mini-button mini-button--danger"
-                      type="button"
-                      disabled={!managementReady || busyModelId === model.model_id}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        const confirmed = window.confirm(
-                          `Delete '${model.display_name}' and remove its local files from app/app-models?`,
-                        );
-                        if (!confirmed) {
-                          return;
-                        }
-                        void withModelAction(model.model_id, () => deleteModelRequest(model.model_id));
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
+            {disabledModels.length ? (
+              <div className="model-list__section">
+                <div className="model-list__section-header">
+                  <span>Disabled models</span>
+                  <strong>{disabledModels.length}</strong>
+                </div>
+                <div className="model-list__grid model-list__grid--disabled">
+                  {disabledModels.map((model, index) =>
+                    renderModelCard(model, index, disabledModels.length),
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -502,7 +623,6 @@ export function ModelsPage() {
           <div className="models-dashboard__header">
             <div>
               <div className="panel__eyebrow">Model Dashboard</div>
-              <h2>{selectedModel?.display_name ?? "Select a model"}</h2>
             </div>
           </div>
 
@@ -522,7 +642,11 @@ export function ModelsPage() {
               <strong>Loading dashboard…</strong>
             </div>
           ) : selectedDashboard && selectedDashboard.available ? (
-            <ModelDashboardPanel model={selectedModel} dashboard={selectedDashboard} />
+            <ModelDashboardPanel
+              model={selectedModel}
+              dashboard={selectedDashboard}
+              onOpenModelInfo={() => setModelInfoId(selectedModel.model_id)}
+            />
           ) : (
             <div className="dashboard-empty">
               <strong>No dashboard attached to this model.</strong>
@@ -601,10 +725,6 @@ export function ModelsPage() {
               <div>
                 <div className="panel__eyebrow">Model Info</div>
                 <h3 id="model-info-modal-title">{modelInfo.display_name}</h3>
-                <p>
-                  Full manifest-level information for this model, separated from the compact card
-                  layout.
-                </p>
               </div>
               <button
                 type="button"
@@ -620,9 +740,7 @@ export function ModelsPage() {
                 {humanizeStatus(modelInfo.status)}
               </span>
               <span className="dashboard-mini-chip">{familyLabel(modelInfo)}</span>
-              <span className="dashboard-mini-chip">
-                priority: {modelInfo.priority}
-              </span>
+              <span className="dashboard-mini-chip">{modelInfo.priority}</span>
             </div>
 
             <div className="model-info-grid">
@@ -639,6 +757,10 @@ export function ModelsPage() {
                 <strong>{modelInfo.version ?? "—"}</strong>
               </div>
               <div className="model-info-item">
+                <span>Task</span>
+                <strong>{modelInfo.framework_task ?? "—"}</strong>
+              </div>
+              <div className="model-info-item">
                 <span>Library</span>
                 <strong>{modelInfo.framework_library ?? "—"}</strong>
               </div>
@@ -651,12 +773,34 @@ export function ModelsPage() {
                 <strong>{modelInfo.architecture ?? modelInfo.backbone ?? "—"}</strong>
               </div>
               <div className="model-info-item">
-                <span>Runtime device</span>
-                <strong>{modelInfo.runtime_device ?? "—"}</strong>
-              </div>
-              <div className="model-info-item">
                 <span>Max sequence length</span>
                 <strong>{modelInfo.runtime_max_sequence_length ?? "—"}</strong>
+              </div>
+              <div
+                className={`model-info-item model-info-item--output${
+                  modelInfoLabelClasses.length ? " model-info-item--wide" : ""
+                }`}
+              >
+                <span>Output</span>
+                {modelInfoLabelClasses.length ? (
+                  <div className="model-info-output">
+                    <strong className="model-info-output__label">
+                      {formatOutputType(modelInfoOutputType, true)}
+                    </strong>
+                    <div className="model-info-output__chips">
+                      {modelInfoLabelClasses.map((label, index) => (
+                        <span
+                          key={String(label.id ?? label.name ?? index)}
+                          className={`dashboard-mini-chip model-info-output__chip model-info-output__chip--${modelInfoChipTone(index)}`}
+                        >
+                          {String(label.display_name ?? label.name ?? label.id)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <strong>{formatOutputType(modelInfoOutputType)}</strong>
+                )}
               </div>
               <div className="model-info-item model-info-item--wide">
                 <span>Description</span>
