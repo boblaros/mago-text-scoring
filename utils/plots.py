@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -313,6 +314,8 @@ def plot_cross_dataset_overview(
     summary_df: pd.DataFrame,
     metric: str = "f1_macro",
     force_replot: bool = True,
+    include_family_mean: bool | None = None,
+    normalize_model_names: bool = True,
 ):
     required_cols = {"family", "dataset", "model", metric}
     missing = required_cols - set(summary_df.columns)
@@ -334,8 +337,23 @@ def plot_cross_dataset_overview(
         return
 
     df = summary_df.copy()
+    df = df.dropna(subset=["dataset", "model", metric]).copy()
+    if df.empty:
+        print("Cross-dataset summary is empty after dropping missing values.")
+        return
 
-    family_order = ["classical", "deep", "transformer"]
+    if normalize_model_names:
+        df["model_display"] = (
+            df["model"]
+            .astype(str)
+            .map(lambda value: re.sub(r"\s*\[[^\]]+\]\s*$", "", value).strip())
+        )
+    else:
+        df["model_display"] = df["model"].astype(str)
+
+    known_family_order = ["classical", "deep", "transformer"]
+    present_families = [family for family in known_family_order if family in set(df["family"].dropna())]
+    family_order = present_families or sorted(df["family"].dropna().astype(str).unique().tolist())
     family_palette = {
         "classical": "#7A7A7A",
         "deep": COLORS[1],
@@ -349,21 +367,24 @@ def plot_cross_dataset_overview(
         if "external_eval_datasets" in globals()
         else sorted(df["dataset"].dropna().unique().tolist())
     )
+    if not dataset_order:
+        dataset_order = sorted(df["dataset"].dropna().unique().tolist())
 
     model_rank_df = (
-        df.groupby(["family", "model"], as_index=False)[metric]
+        df.groupby(["family", "model_display"], as_index=False)[metric]
         .mean()
-        .sort_values(["family", metric, "model"], ascending=[True, False, True])
+        .sort_values(["family", metric, "model_display"], ascending=[True, False, True])
         .reset_index(drop=True)
     )
 
-    model_order = model_rank_df["model"].tolist()
-    model_family_map = dict(model_rank_df[["model", "family"]].drop_duplicates().values)
+    model_order = model_rank_df["model_display"].tolist()
+    model_family_map = dict(model_rank_df[["model_display", "family"]].drop_duplicates().values)
 
     model_heatmap_df = (
-        df.pivot_table(index="model", columns="dataset", values=metric, aggfunc="mean")
+        df.pivot_table(index="model_display", columns="dataset", values=metric, aggfunc="mean")
         .reindex(index=model_order, columns=dataset_order)
     )
+    model_heatmap_df = model_heatmap_df.dropna(axis=0, how="all").dropna(axis=1, how="all")
 
     family_heatmap_df = (
         df.groupby(["family", "dataset"], as_index=False)[metric]
@@ -371,16 +392,23 @@ def plot_cross_dataset_overview(
         .pivot(index="family", columns="dataset", values=metric)
         .reindex(index=family_order, columns=dataset_order)
     )
+    family_heatmap_df = family_heatmap_df.dropna(axis=0, how="all").dropna(axis=1, how="all")
+
+    if model_heatmap_df.empty:
+        print("No cross-dataset values are available for plotting.")
+        return
+
+    if include_family_mean is None:
+        include_family_mean = len(family_heatmap_df.index) > 1 and not family_heatmap_df.empty
+    include_family_mean = bool(include_family_mean and not family_heatmap_df.empty)
 
     model_heatmap_df.to_csv(matrix_path)
     print(f"Cross-dataset matrix saved to: {matrix_path}")
 
-    all_values = pd.concat(
-    [
-        model_heatmap_df.stack(),
-        family_heatmap_df.stack(),
-    ]
-    )
+    value_parts = [model_heatmap_df.stack()]
+    if include_family_mean:
+        value_parts.append(family_heatmap_df.stack())
+    all_values = pd.concat(value_parts)
     all_values = all_values.dropna()
 
     vmax = float(all_values.max()) if len(all_values) else 1.0
@@ -391,11 +419,16 @@ def plot_cross_dataset_overview(
         as_cmap=True,
     )
 
-    fig = plt.figure(figsize=(18, max(7, len(model_order) * 0.42)))
-    gs = fig.add_gridspec(1, 2, width_ratios=[5.5, 1.8], wspace=0.18)
-
-    ax_main = fig.add_subplot(gs[0, 0])
-    ax_side = fig.add_subplot(gs[0, 1])
+    if include_family_mean:
+        fig = plt.figure(figsize=(18, max(7, len(model_order) * 0.42)))
+        gs = fig.add_gridspec(1, 2, width_ratios=[5.5, 1.8], wspace=0.18)
+        ax_main = fig.add_subplot(gs[0, 0])
+        ax_side = fig.add_subplot(gs[0, 1])
+    else:
+        fig, ax_main = plt.subplots(
+            figsize=(max(10, len(model_heatmap_df.columns) * 2.4), max(3.8, len(model_order) * 0.72 + 1.2))
+        )
+        ax_side = None
 
     sns.heatmap(
         model_heatmap_df,
@@ -411,18 +444,19 @@ def plot_cross_dataset_overview(
         cbar_kws={"shrink": 0.85, "label": metric.replace("_", " ").title()},
     )
 
-    sns.heatmap(
-        family_heatmap_df,
-        annot=True,
-        fmt=".3f",
-        cmap=cmap,
-        vmin=0.0,
-        vmax=vmax,
-        linewidths=0.6,
-        linecolor="white",
-        cbar=False,
-        ax=ax_side,
-    )
+    if include_family_mean:
+        sns.heatmap(
+            family_heatmap_df,
+            annot=True,
+            fmt=".3f",
+            cmap=cmap,
+            vmin=0.0,
+            vmax=vmax,
+            linewidths=0.6,
+            linecolor="white",
+            cbar=False,
+            ax=ax_side,
+        )
 
     ax_main.set_title(
         f"Cross-Dataset Evaluation by Model ({metric.replace('_', ' ').title()})",
@@ -430,38 +464,40 @@ def plot_cross_dataset_overview(
         fontweight="bold",
         pad=12,
     )
-    ax_side.set_title(
-        "Family Mean",
-        fontsize=13,
-        fontweight="bold",
-        pad=12,
-    )
 
     ax_main.set_xlabel("External Dataset")
     ax_main.set_ylabel("Model")
-    ax_side.set_xlabel("External Dataset")
-    ax_side.set_ylabel("Family")
 
     ax_main.set_xticklabels(
         [x.get_text().replace("_", "\n") for x in ax_main.get_xticklabels()],
         rotation=0,
         ha="center",
     )
-    ax_side.set_xticklabels(
-        [x.get_text().replace("_", "\n") for x in ax_side.get_xticklabels()],
-        rotation=0,
-        ha="center",
-    )
+    if include_family_mean:
+        ax_side.set_title(
+            "Family Mean",
+            fontsize=13,
+            fontweight="bold",
+            pad=12,
+        )
+        ax_side.set_xlabel("External Dataset")
+        ax_side.set_ylabel("Family")
+        ax_side.set_xticklabels(
+            [x.get_text().replace("_", "\n") for x in ax_side.get_xticklabels()],
+            rotation=0,
+            ha="center",
+        )
 
     for tick in ax_main.get_yticklabels():
         model_name = tick.get_text()
         family = model_family_map.get(model_name)
         tick.set_color(family_palette.get(family, "#222222"))
 
-    for tick in ax_side.get_yticklabels():
-        family = tick.get_text()
-        tick.set_color(family_palette.get(family, "#222222"))
-        tick.set_fontweight("bold")
+    if include_family_mean:
+        for tick in ax_side.get_yticklabels():
+            family = tick.get_text()
+            tick.set_color(family_palette.get(family, "#222222"))
+            tick.set_fontweight("bold")
 
     family_breaks = []
     prev_family = None
