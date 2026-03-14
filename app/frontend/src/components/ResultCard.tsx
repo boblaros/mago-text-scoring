@@ -94,7 +94,7 @@ export function ResultCard({ domain, lane }: ResultCardProps) {
 
       <div className="result-card__meta">
         <span className="result-card__latency">
-          {result ? `${result.latency_ms.toFixed(1)} ms` : STATUS_LABELS[lane.status]}
+          {result ? `Latency: ${result.latency_ms.toFixed(1)} ms` : "Latency: —"}
         </span>
         <span className="result-card__confidence">
           {result ? `Confidence: ${confidence}%` : "Confidence: —"}

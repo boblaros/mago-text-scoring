@@ -40,7 +40,7 @@ export function RegistryDeck({
     { label: "Status", value: PHASE_LABELS[phase] },
     { label: "Runtime", value: import.meta.env.DEV ? "Local" : "App" },
     {
-      label: "Mean confidence",
+      label: "Avg confidence",
       value: analysis?.aggregate.mean_confidence
         ? `${Math.round(analysis.aggregate.mean_confidence * 100)}%`
         : "—",

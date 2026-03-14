@@ -11,11 +11,33 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
+function joinApiUrl(path: string): string {
+  const normalizedBase = API_BASE_URL.endsWith("/")
+    ? API_BASE_URL.slice(0, -1)
+    : API_BASE_URL;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  return `${normalizedBase}${normalizedPath}`;
+}
+
+function encodePathSegments(path: string): string {
+  return path
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function buildModelDashboardAssetUrl(modelId: string, assetPath: string): string {
+  return joinApiUrl(
+    `/models/${encodeURIComponent(modelId)}/dashboard/assets/${encodePathSegments(assetPath)}`,
+  );
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData;
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(joinApiUrl(path), {
       headers: isFormData
         ? init?.headers
         : {
@@ -105,5 +127,12 @@ export async function uploadModel(formData: FormData): Promise<CatalogSnapshotRe
 export async function fetchModelDashboard(
   modelId: string,
 ): Promise<ModelDashboardResponse> {
-  return request<ModelDashboardResponse>(`/models/${modelId}/dashboard`);
+  const response = await request<ModelDashboardResponse>(`/models/${modelId}/dashboard`);
+  return {
+    ...response,
+    images: response.images.map((image) => ({
+      ...image,
+      url: buildModelDashboardAssetUrl(modelId, image.path),
+    })),
+  };
 }

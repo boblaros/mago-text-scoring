@@ -4,6 +4,7 @@ import { PlotlyFigure } from "./PlotlyFigure";
 import type {
   DashboardFigure,
   DashboardImageAsset,
+  DashboardSourceItem,
   DashboardSectionSummary,
   DomainCatalogModel,
   ModelDashboardResponse,
@@ -24,6 +25,32 @@ type ChartIndicator = DashboardSectionSummary & {
   metaLabel: string;
   actionLabel: string;
   descriptionText: string;
+};
+
+type MetadataValueGroup = {
+  key: string;
+  values: string[];
+};
+
+type SourceGroup = {
+  category: string;
+  paths: string[];
+  reason: string | null;
+};
+
+type MetadataSourceAccordionItem = {
+  id: string;
+  title: string;
+  groups: SourceGroup[];
+  paths: string[];
+};
+
+type MetadataRuntimeAccordionItem = {
+  id: string;
+  title: string;
+  groups: MetadataValueGroup[];
+  values: string[];
+  isLocalFiles?: boolean;
 };
 
 const CHART_SECTION_PRIORITY: Record<string, number> = {
@@ -48,6 +75,44 @@ const ARTEFACTS_AND_CHARTS_ORDER: Record<string, number> = {
   samples: 8,
   metadata: 9,
 };
+
+const METADATA_ARTIFACT_ORDER: Record<string, number> = {
+  base_dir: 0,
+  weights: 1,
+  tokenizer: 2,
+  config: 3,
+  vocabulary: 4,
+  label_map_file: 5,
+  label_classes_file: 6,
+  label_encoder_file: 7,
+};
+
+const SOURCE_ACCORDION_ORDER = [
+  { id: "metadata", title: "Metadata", categories: ["metadata"] },
+  { id: "experiment_config", title: "Experiment config", categories: ["experiment_config"] },
+  { id: "primary_evaluation", title: "Primary evaluation", categories: ["primary_evaluation"] },
+  { id: "benchmark", title: "Benchmark", categories: ["benchmark"] },
+  { id: "training_history", title: "Training history", categories: ["training_history", "learning_curve"] },
+  { id: "cross_dataset", title: "Cross dataset", categories: ["cross_dataset"] },
+  {
+    id: "class_distribution",
+    title: "Class distribution",
+    categories: ["class_distribution", "source_dataset_distribution"],
+  },
+  { id: "prediction_samples", title: "Prediction samples", categories: ["prediction_samples"] },
+  { id: "confusion_matrix", title: "Confusion matrix", categories: ["confusion_matrix"] },
+] as const;
+
+const RUNTIME_ACCORDION_ORDER = [
+  { id: "runtime_bundle", title: "Runtime bundle", keys: ["base_dir", "weights", "tokenizer"] },
+  { id: "config", title: "Config", keys: ["config"] },
+  { id: "vocabulary", title: "Vocabulary", keys: ["vocabulary"] },
+  { id: "label_map_file", title: "Label map file", keys: ["label_map_file"] },
+  { id: "label_classes_file", title: "Label classes file", keys: ["label_classes_file"] },
+  { id: "label_encoder_file", title: "Label encoder file", keys: ["label_encoder_file"] },
+  { id: "best_checkpoint", title: "Best checkpoint", keys: ["best_checkpoint", "best_model_dir", "checkpoints_dir"] },
+  { id: "experiment_dir", title: "Experiment dir", keys: ["experiment_dir"] },
+] as const;
 
 function asRecord(value: unknown) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -88,12 +153,16 @@ function formatTimestamp(value?: string | null) {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
+  const now = new Date();
+  const includeYear = date.getFullYear() !== now.getFullYear();
+
   return date.toLocaleString([], {
-    year: "numeric",
+    ...(includeYear ? { year: "numeric" as const } : {}),
     month: "short",
-    day: "2-digit",
+    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 }
 
@@ -171,7 +240,7 @@ function formatCoverageSectionDescription(section: DashboardSectionSummary) {
     return "Prediction examples with labels and scores.";
   }
   if (section.id === "metadata") {
-    return "Sources, provenance, bundles, and manifest links.";
+    return "Sources, runtime assets, and diagnostics.";
   }
 
   return String(section.reason ?? section.description ?? "No notes attached.");
@@ -207,29 +276,34 @@ function comparisonTone(label: string) {
   return "default";
 }
 
-function traceabilitySourceItemClass(category: string) {
-  const normalized = category.toLowerCase();
-  const classes = ["source-list__item", "models-dashboard__source-item"];
-
-  if (normalized.includes("meta")) {
-    classes.push("models-dashboard__source-item--metadata");
-  } else if (
-    normalized.includes("metric") ||
-    normalized.includes("score") ||
-    normalized.includes("evaluation")
-  ) {
-    classes.push("models-dashboard__source-item--metrics");
-  } else if (
-    normalized.includes("artifact") ||
-    normalized.includes("manifest") ||
-    normalized.includes("path")
-  ) {
-    classes.push("models-dashboard__source-item--artifacts");
-  } else {
-    classes.push("models-dashboard__source-item--default");
+function overviewFactTone(label: string) {
+  if (label === "Model") {
+    return "identity";
   }
+  if (label === "Domain") {
+    return "domain";
+  }
+  if (label === "Runtime") {
+    return "runtime";
+  }
+  if (label === "Generated") {
+    return "generated";
+  }
+  if (label === "Sections") {
+    return "sections";
+  }
+  if (label === "Charts") {
+    return "charts";
+  }
+  return "default";
+}
 
-  return classes.join(" ");
+function isOverviewFactFeatured(label: string) {
+  return label === "Model";
+}
+
+function isOverviewFactNumeric(label: string) {
+  return label === "Sections" || label === "Charts";
 }
 
 function stringifyStructuredValue(value: unknown) {
@@ -242,6 +316,195 @@ function stringifyStructuredValue(value: unknown) {
 
 function toRecordArray(value: unknown) {
   return asArray(value).filter((item): item is Record<string, unknown> => Boolean(asRecord(item)));
+}
+
+function toStringValues(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value.trim() ? [value] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => (typeof item === "string" && item.trim() ? [item] : []));
+  }
+
+  return [];
+}
+
+function dedupeStrings(values: string[]) {
+  return Array.from(new Set(values));
+}
+
+function pluralize(count: number, singular: string) {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function lastPathSegment(value: string) {
+  const segments = value.split("/").filter(Boolean);
+  return segments[segments.length - 1] ?? value;
+}
+
+function summarizeListPreview(values: string[]) {
+  const visibleValues = values.map((value) => value.trim()).filter(Boolean);
+  if (!visibleValues.length) {
+    return null;
+  }
+
+  const [first, ...rest] = visibleValues;
+  return rest.length ? `${first} +${rest.length} more` : first;
+}
+
+function summarizePathPreview(values: string[]) {
+  return summarizeListPreview(values.map((value) => lastPathSegment(value)));
+}
+
+function buildMetadataValueGroups(
+  record: Record<string, unknown> | null,
+  order: Record<string, number> = {},
+): MetadataValueGroup[] {
+  return Object.entries(record ?? {})
+    .map(([key, value]) => ({
+      key,
+      values: dedupeStrings(toStringValues(value)),
+    }))
+    .filter((group) => group.values.length)
+    .sort(
+      (left, right) =>
+        (order[left.key] ?? Number.MAX_SAFE_INTEGER) - (order[right.key] ?? Number.MAX_SAFE_INTEGER) ||
+        left.key.localeCompare(right.key),
+    );
+}
+
+function buildSourceGroups(selectedSources: DashboardSourceItem[]): SourceGroup[] {
+  const grouped = new Map<string, { paths: string[]; reasons: string[] }>();
+
+  selectedSources.forEach((source) => {
+    const current = grouped.get(source.category) ?? { paths: [], reasons: [] };
+    current.paths.push(source.path);
+    if (source.reason) {
+      current.reasons.push(source.reason);
+    }
+    grouped.set(source.category, current);
+  });
+
+  return Array.from(grouped.entries()).map(([category, value]) => ({
+    category,
+    paths: dedupeStrings(value.paths),
+    reason: dedupeStrings(value.reasons)[0] ?? null,
+  }));
+}
+
+function isVisibleArtifactPath(path: string) {
+  return path.split("/").every((segment) => segment && !segment.startsWith("."));
+}
+
+function buildMetadataSourceAccordionItems(sourceGroups: SourceGroup[]): MetadataSourceAccordionItem[] {
+  const consumedCategories = new Set<string>();
+
+  const orderedItems: MetadataSourceAccordionItem[] = SOURCE_ACCORDION_ORDER.flatMap((definition) => {
+    const groups = sourceGroups.filter((group) =>
+      definition.categories.some((category) => category === group.category),
+    );
+    if (!groups.length) {
+      return [];
+    }
+
+    groups.forEach((group) => consumedCategories.add(group.category));
+
+    return [
+      {
+        id: definition.id,
+        title: definition.title,
+        groups,
+        paths: dedupeStrings(groups.flatMap((group) => group.paths)),
+      },
+    ];
+  });
+
+  const extraItems = sourceGroups
+    .filter((group) => !consumedCategories.has(group.category))
+    .sort((left, right) => left.category.localeCompare(right.category))
+    .map((group) => ({
+      id: group.category,
+      title: formatLabel(group.category),
+      groups: [group],
+      paths: group.paths,
+    }));
+
+  return [...orderedItems, ...extraItems];
+}
+
+function buildMetadataRuntimeAccordionItems(
+  runtimeArtifactGroups: MetadataValueGroup[],
+  experimentPathGroups: MetadataValueGroup[],
+  localFiles: string[],
+): MetadataRuntimeAccordionItem[] {
+  const runtimeGroupMap = new Map(runtimeArtifactGroups.map((group) => [group.key, group]));
+  const experimentGroupMap = new Map(experimentPathGroups.map((group) => [group.key, group]));
+  const consumedRuntimeKeys = new Set<string>();
+  const consumedExperimentKeys = new Set<string>();
+
+  const orderedItems: MetadataRuntimeAccordionItem[] = RUNTIME_ACCORDION_ORDER.flatMap((definition) => {
+    const groups = definition.keys.flatMap((key) => {
+      const group = runtimeGroupMap.get(key) ?? experimentGroupMap.get(key);
+      if (!group) {
+        return [];
+      }
+      if (runtimeGroupMap.has(key)) {
+        consumedRuntimeKeys.add(key);
+      }
+      if (experimentGroupMap.has(key)) {
+        consumedExperimentKeys.add(key);
+      }
+      return [group];
+    });
+
+    if (!groups.length) {
+      return [];
+    }
+
+    return [
+      {
+        id: definition.id,
+        title: definition.title,
+        groups,
+        values: dedupeStrings(groups.flatMap((group) => group.values)),
+      },
+    ];
+  });
+
+  const extraRuntimeItems: MetadataRuntimeAccordionItem[] = runtimeArtifactGroups
+    .filter((group) => !consumedRuntimeKeys.has(group.key))
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map((group) => ({
+      id: group.key,
+      title: formatLabel(group.key),
+      groups: [group],
+      values: group.values,
+    }));
+
+  const extraExperimentItems: MetadataRuntimeAccordionItem[] = experimentPathGroups
+    .filter((group) => !consumedExperimentKeys.has(group.key))
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map((group) => ({
+      id: group.key,
+      title: formatLabel(group.key),
+      groups: [group],
+      values: group.values,
+    }));
+
+  const items = [...orderedItems, ...extraRuntimeItems, ...extraExperimentItems];
+
+  if (localFiles.length) {
+    items.push({
+      id: "top_level_local_files",
+      title: "Top-level local files",
+      groups: [],
+      values: localFiles,
+      isLocalFiles: true,
+    });
+  }
+
+  return items;
 }
 
 function getMetricFromSplits(
@@ -292,7 +555,6 @@ function buildPrimaryMetricCards(
       cards.push({
         label: "External eval",
         value: formatNumber(average),
-        hint: `avg across ${crossDatasetRows.length} dataset${crossDatasetRows.length === 1 ? "" : "s"}`,
       });
     }
   }
@@ -461,6 +723,55 @@ function DashboardDetail({
   );
 }
 
+function MetadataAccordion({
+  title,
+  meta,
+  preview,
+  tone,
+  level,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  meta?: string;
+  preview?: string | null;
+  tone: "core" | "runtime" | "diagnostic";
+  level: "top" | "nested";
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <section
+      className={`models-dashboard__metadata-accordion models-dashboard__metadata-accordion--${tone} models-dashboard__metadata-accordion--${level}${
+        isOpen ? " is-open" : ""
+      }`}
+    >
+      <button
+        type="button"
+        className="models-dashboard__metadata-accordion-toggle"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <div className="models-dashboard__metadata-accordion-summary">
+          <div className="models-dashboard__metadata-accordion-title-row">
+            <strong className="models-dashboard__metadata-accordion-title">{title}</strong>
+            {meta ? <span className="models-dashboard__metadata-accordion-meta">{meta}</span> : null}
+          </div>
+          {preview ? <span className="models-dashboard__metadata-accordion-preview">{preview}</span> : null}
+        </div>
+
+        <span className="models-dashboard__metadata-accordion-caret" aria-hidden="true" />
+      </button>
+
+      <div className="models-dashboard__metadata-accordion-shell">
+        <div className="models-dashboard__metadata-accordion-content">{children}</div>
+      </div>
+    </section>
+  );
+}
+
 function DashboardHeaderInfo({
   label,
   text,
@@ -483,11 +794,13 @@ function CompactTable({
   eyebrow,
   rows,
   limit,
+  hideHeader = false,
 }: {
   title: string;
   eyebrow: string;
   rows: Record<string, unknown>[];
   limit?: number;
+  hideHeader?: boolean;
 }) {
   if (!rows.length) {
     return null;
@@ -507,12 +820,14 @@ function CompactTable({
 
   return (
     <div className="models-dashboard__table-block">
-      <div className="dashboard-block__header">
-        <div>
-          <div className="dashboard-block__eyebrow">{eyebrow}</div>
-          <h4>{title}</h4>
+      {!hideHeader ? (
+        <div className="dashboard-block__header">
+          <div>
+            <div className="dashboard-block__eyebrow">{eyebrow}</div>
+            <h4>{title}</h4>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="dashboard-table-shell">
         <table className="dashboard-table">
@@ -555,39 +870,62 @@ function SampleCards({
   samples: Record<string, unknown>[];
 }) {
   return (
-    <div className="dashboard-samples models-dashboard__sample-grid">
-      {samples.map((sample, index) => {
-        const productionPrediction = asRecord(sample.production_prediction);
-        const referencePrediction = asRecord(sample.reference_prediction);
-        return (
-          <article key={`sample-${index}`} className="sample-card">
-            <div className="sample-card__meta">
-              <span>Example {String(sample.example_id ?? index + 1)}</span>
-            </div>
-            <p>{String(sample.text ?? "")}</p>
-            <div className="sample-card__predictions">
-              {productionPrediction ? (
-                <div>
-                  <strong>{String(productionPrediction.model ?? "Production")}</strong>
-                  <span>
-                    {String(productionPrediction.label ?? "—")} ·{" "}
-                    {formatNumber(productionPrediction.confidence)}
-                  </span>
-                </div>
-              ) : null}
-              {referencePrediction ? (
-                <div>
-                  <strong>{String(referencePrediction.model ?? "Reference")}</strong>
-                  <span>
-                    {String(referencePrediction.label ?? "—")} ·{" "}
-                    {formatNumber(referencePrediction.confidence)}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-          </article>
-        );
-      })}
+    <div className="dashboard-table-shell models-dashboard__sample-table-shell">
+      <table className="dashboard-table models-dashboard__sample-table">
+        <thead>
+          <tr>
+            <th>№</th>
+            <th>Text</th>
+            <th>Production</th>
+            <th>Reference</th>
+          </tr>
+        </thead>
+        <tbody>
+          {samples.map((sample, index) => {
+            const productionPrediction = asRecord(sample.production_prediction);
+            const referencePrediction = asRecord(sample.reference_prediction);
+
+            return (
+              <tr key={`sample-${index}`}>
+                <td className="models-dashboard__sample-id">
+                  {String(sample.example_id ?? index + 1)}
+                </td>
+                <td className="models-dashboard__sample-text">
+                  <div className="models-dashboard__sample-text-copy">
+                    {String(sample.text ?? "—")}
+                  </div>
+                </td>
+                <td>
+                  {productionPrediction ? (
+                    <div className="models-dashboard__sample-prediction">
+                      <strong>{String(productionPrediction.model ?? "Production")}</strong>
+                      <span>
+                        {String(productionPrediction.label ?? "—")} ·{" "}
+                        {formatNumber(productionPrediction.confidence)}
+                      </span>
+                    </div>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td>
+                  {referencePrediction ? (
+                    <div className="models-dashboard__sample-prediction">
+                      <strong>{String(referencePrediction.model ?? "Reference")}</strong>
+                      <span>
+                        {String(referencePrediction.label ?? "—")} ·{" "}
+                        {formatNumber(referencePrediction.confidence)}
+                      </span>
+                    </div>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -840,23 +1178,6 @@ export function ModelDashboardPanel({
     [dashboard.manifest?.notes, overview?.notes, sourceAudit?.notes],
   );
 
-  const sectionCounts = useMemo(
-    () =>
-      manifestSections.reduce(
-        (counts, section) => {
-          counts[section.status] += 1;
-          return counts;
-        },
-        {
-          available: 0,
-          image_only: 0,
-          missing: 0,
-          not_applicable: 0,
-        },
-      ),
-    [manifestSections],
-  );
-
   const artefactsAndChartsSections = useMemo(
     () =>
       [...manifestSections].sort(
@@ -901,16 +1222,6 @@ export function ModelDashboardPanel({
         label: "External datasets",
         value: String(crossDatasetRows.length),
         hint: "Cross-dataset rows loaded",
-      });
-    }
-
-    if (trainingHistory) {
-      cards.push({
-        label: "Training log",
-        value: `${asArray(trainingHistory.train_events).length.toLocaleString()} / ${asArray(
-          trainingHistory.eval_events,
-        ).length.toLocaleString()}`,
-        hint: `${String(trainingHistory.x_axis ?? "step")} train / eval events`,
       });
     }
 
@@ -1002,13 +1313,41 @@ export function ModelDashboardPanel({
     return total + (typeof value === "number" ? value : 0);
   }, 0);
   const selectedSources = dashboard.manifest?.selected_sources ?? [];
-  const selectedSourcePreview = selectedSources.slice(0, 3);
+  const sourceGroups = useMemo(() => buildSourceGroups(selectedSources), [selectedSources]);
+  const runtimeArtifactGroups = useMemo(
+    () => buildMetadataValueGroups(metadataArtifacts, METADATA_ARTIFACT_ORDER),
+    [metadataArtifacts],
+  );
+  const experimentPathGroups = useMemo(
+    () => buildMetadataValueGroups(artifactPaths),
+    [artifactPaths],
+  );
+  const localFiles = useMemo(
+    () => artifactsPresent.filter((path) => isVisibleArtifactPath(path)),
+    [artifactsPresent],
+  );
+  const scanRoots = asArray(sourceAudit?.scanned_roots).map(String);
+  const sourceAccordionItems = useMemo(
+    () => buildMetadataSourceAccordionItems(sourceGroups),
+    [sourceGroups],
+  );
+  const runtimeAccordionItems = useMemo(
+    () => buildMetadataRuntimeAccordionItems(runtimeArtifactGroups, experimentPathGroups, localFiles),
+    [experimentPathGroups, localFiles, runtimeArtifactGroups],
+  );
 
-  const sourceBundleFacts = [
-    { label: "Selected sources", value: String(selectedSources.length || "—") },
-    { label: "Primary paths", value: String(artifactPaths ? Object.keys(artifactPaths).length : "—") },
-    { label: "Artifact groups", value: String(metadataArtifacts ? Object.keys(metadataArtifacts).length : "—") },
-    { label: "Files present", value: String(artifactsPresent.length || "—") },
+  const metadataSummaryFacts = [
+    { label: "Selected sources", value: String(selectedSources.length) },
+    { label: "Source groups", value: String(sourceGroups.length) },
+    { label: "Runtime groups", value: String(runtimeArtifactGroups.length) },
+    { label: "Local files", value: String(localFiles.length) },
+  ];
+
+  const diagnosticsSummaryFacts = [
+    { label: "Audit groups", value: String(artifactCountEntries.length) },
+    { label: "Audited files", value: String(artifactInventoryTotal) },
+    { label: "Scan roots", value: String(scanRoots.length) },
+    { label: "Entrypoints", value: String(Object.keys(dashboard.manifest?.entrypoints ?? {}).length) },
   ];
 
   const handleArtefactsAndChartsClick = (section: DashboardSectionSummary) => {
@@ -1049,17 +1388,17 @@ export function ModelDashboardPanel({
 
           <div className="dashboard-chip-row">
             <span className={`status-chip status-chip--${model.status}`}>{humanizeStatus(model.status)}</span>
-            <span className={`status-chip status-chip--${model.dashboard_status}`}>
-              {humanizeStatus(model.dashboard_status)}
-            </span>
-            <span className="dashboard-mini-chip">{model.domain}</span>
-            <span className="dashboard-mini-chip">{familyLabel(model)}</span>
           </div>
         </div>
 
         <div className="models-dashboard__fact-grid">
           {overviewFacts.map((fact) => (
-            <div key={fact.label} className="models-dashboard__fact-card">
+            <div
+              key={fact.label}
+              className={`models-dashboard__fact-card models-dashboard__fact-card--${overviewFactTone(fact.label)}${
+                isOverviewFactFeatured(fact.label) ? " models-dashboard__fact-card--featured" : ""
+              }${isOverviewFactNumeric(fact.label) ? " models-dashboard__fact-card--numeric" : ""}`}
+            >
               <span className="models-dashboard__fact-label">{fact.label}</span>
               <strong className="models-dashboard__fact-value">{fact.value}</strong>
             </div>
@@ -1076,12 +1415,6 @@ export function ModelDashboardPanel({
               </div>
             ))}
           </div>
-        ) : null}
-
-        {metadataModel ? (
-          <DashboardDetail title="Model metadata JSON" meta="raw">
-            <pre className="dashboard-kv__code">{stringifyStructuredValue(metadataModel)}</pre>
-          </DashboardDetail>
         ) : null}
 
         {notes.length ? (
@@ -1102,25 +1435,7 @@ export function ModelDashboardPanel({
           <div>
             <div className="dashboard-block__title-row">
               <div className="dashboard-block__eyebrow">Artefacts &amp; Charts</div>
-              <DashboardHeaderInfo
-                label="About Artefacts and Charts"
-                text="Quick access to linked artifacts, charts, and dashboard sections without leaving the model overview."
-              />
             </div>
-          </div>
-          <div className="dashboard-chip-row">
-            {sectionCounts.available ? (
-              <span className="dashboard-mini-chip">Available {sectionCounts.available}</span>
-            ) : null}
-            {sectionCounts.image_only ? (
-              <span className="dashboard-mini-chip">Partial {sectionCounts.image_only}</span>
-            ) : null}
-            {sectionCounts.missing ? (
-              <span className="dashboard-mini-chip">Missing {sectionCounts.missing}</span>
-            ) : null}
-            {sectionCounts.not_applicable ? (
-              <span className="dashboard-mini-chip">N/A {sectionCounts.not_applicable}</span>
-            ) : null}
           </div>
         </div>
 
@@ -1151,10 +1466,6 @@ export function ModelDashboardPanel({
             <div>
               <div className="dashboard-block__title-row">
                 <div className="dashboard-block__eyebrow">Evaluation</div>
-                <DashboardHeaderInfo
-                  label="About Evaluation"
-                  text="Primary signals stay visible; deeper tables and samples stay folded until needed."
-                />
               </div>
             </div>
           </div>
@@ -1163,7 +1474,6 @@ export function ModelDashboardPanel({
             <div className="models-dashboard__subpanel models-dashboard__subpanel--compact models-dashboard__subpanel--evaluation-primary">
               <div className="models-dashboard__subpanel-header">
                 <div className="dashboard-block__eyebrow">Primary</div>
-                <h4>Split metrics</h4>
               </div>
 
               {primarySplitEntries.length ? (
@@ -1195,7 +1505,6 @@ export function ModelDashboardPanel({
             <div className="models-dashboard__subpanel models-dashboard__subpanel--compact models-dashboard__subpanel--evaluation-context">
               <div className="models-dashboard__subpanel-header">
                 <div className="dashboard-block__eyebrow">Comparison</div>
-                <h4>Context</h4>
               </div>
 
               {comparisonCards.length ? (
@@ -1222,8 +1531,7 @@ export function ModelDashboardPanel({
           <div className="models-dashboard__detail-stack models-dashboard__detail-stack--compact">
             {benchmarkRows.length ? (
               <DashboardDetail
-                title="Benchmark rows"
-                meta={`${benchmarkRows.length} row${benchmarkRows.length === 1 ? "" : "s"}`}
+                title="Benchmark leaderboard"
                 className="models-dashboard__detail--evaluation"
               >
                 <CompactTable
@@ -1231,6 +1539,7 @@ export function ModelDashboardPanel({
                   eyebrow="Benchmark"
                   rows={benchmarkRows}
                   limit={8}
+                  hideHeader
                 />
               </DashboardDetail>
             ) : null}
@@ -1238,13 +1547,13 @@ export function ModelDashboardPanel({
             {crossDatasetRows.length ? (
               <DashboardDetail
                 title="Cross-dataset results"
-                meta={`${crossDatasetRows.length} row${crossDatasetRows.length === 1 ? "" : "s"}`}
                 className="models-dashboard__detail--evaluation"
               >
                 <CompactTable
                   title="External evaluation"
                   eyebrow="Cross dataset"
                   rows={crossDatasetRows}
+                  hideHeader
                 />
               </DashboardDetail>
             ) : null}
@@ -1252,7 +1561,6 @@ export function ModelDashboardPanel({
             {learningCurves.length ? (
               <DashboardDetail
                 title="Learning curve points"
-                meta={`${learningCurves.length} point${learningCurves.length === 1 ? "" : "s"}`}
                 className="models-dashboard__detail--evaluation"
               >
                 <CompactTable
@@ -1260,6 +1568,7 @@ export function ModelDashboardPanel({
                   eyebrow="Curves"
                   rows={learningCurves}
                   limit={8}
+                  hideHeader
                 />
               </DashboardDetail>
             ) : null}
@@ -1286,7 +1595,6 @@ export function ModelDashboardPanel({
             {predictionSamples.length ? (
               <DashboardDetail
                 title="Prediction samples"
-                meta={`${predictionSamples.length} sample${predictionSamples.length === 1 ? "" : "s"}`}
                 className="models-dashboard__detail--evaluation"
               >
                 <SampleCards samples={predictionSamples} />
@@ -1298,7 +1606,7 @@ export function ModelDashboardPanel({
 
       <article
         ref={metadataRef}
-        className="dashboard-block models-dashboard__panel models-dashboard__panel--wide models-dashboard__panel--traceability"
+        className="dashboard-block models-dashboard__panel models-dashboard__panel--wide models-dashboard__panel--metadata"
       >
         <div className="dashboard-block__header">
           <div>
@@ -1306,26 +1614,63 @@ export function ModelDashboardPanel({
               <div className="dashboard-block__eyebrow">Metadata</div>
               <DashboardHeaderInfo
                 label="About Metadata"
-                text="Metadata, provenance, artifact counts, and technical path groups for the generated dashboard bundle."
+                text="Source traceability, runtime assets, and optional diagnostics for the generated dashboard bundle."
               />
             </div>
           </div>
         </div>
 
-        <div className="models-dashboard__detail-stack models-dashboard__detail-stack--traceability">
-          <DashboardDetail
-            title="Provenance"
-            meta={`${selectedSources.length} source${selectedSources.length === 1 ? "" : "s"}`}
-            className="models-dashboard__detail--traceability models-dashboard__detail--traceability-sources"
+        <div className="models-dashboard__metadata-grid models-dashboard__metadata-grid--summary">
+          {metadataSummaryFacts.map((fact) => (
+            <div key={fact.label} className="models-dashboard__mini-fact models-dashboard__mini-fact--summary">
+              <span>{fact.label}</span>
+              <strong>{fact.value}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div className="models-dashboard__metadata-accordion-stack">
+          <MetadataAccordion
+            title="Sources"
+            meta={`${sourceAccordionItems.length} group${sourceAccordionItems.length === 1 ? "" : "s"}`}
+            tone="core"
+            level="top"
           >
-            {selectedSourcePreview.length ? (
-              <div className="source-list models-dashboard__source-preview models-dashboard__source-list--preview">
-                {selectedSourcePreview.map((source) => (
-                  <div key={`${source.category}-${source.path}`} className={traceabilitySourceItemClass(source.category)}>
-                    <span>{source.category}</span>
-                    <strong>{source.path}</strong>
-                    <p>{source.reason ?? "No reason attached."}</p>
-                  </div>
+            {sourceAccordionItems.length ? (
+              <div className="models-dashboard__metadata-accordion-children">
+                {sourceAccordionItems.map((item) => (
+                  <MetadataAccordion
+                    key={item.id}
+                    title={item.title}
+                    meta={pluralize(item.paths.length, "source")}
+                    tone="core"
+                    level="nested"
+                  >
+                    <div className="models-dashboard__metadata-accordion-detail">
+                      {item.groups.map((group) => (
+                        <div
+                          key={`${item.id}-${group.category}`}
+                          className="models-dashboard__metadata-accordion-detail-group"
+                        >
+                          {item.groups.length > 1 ? (
+                            <div className="dashboard-chip-row models-dashboard__label-row--metadata">
+                              <span className="dashboard-mini-chip models-dashboard__label-chip">
+                                {formatLabel(group.category)}
+                              </span>
+                            </div>
+                          ) : null}
+                          {group.reason ? <p className="models-dashboard__detail-copy">{group.reason}</p> : null}
+                          <div className="models-dashboard__path-stack">
+                            {group.paths.map((path) => (
+                              <div key={`${group.category}-${path}`} className="models-dashboard__path-chip">
+                                {path}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </MetadataAccordion>
                 ))}
               </div>
             ) : (
@@ -1333,37 +1678,85 @@ export function ModelDashboardPanel({
                 <strong>No selected source records were attached.</strong>
               </div>
             )}
-          </DashboardDetail>
+          </MetadataAccordion>
 
-          {selectedSources.length > 3 ? (
-            <DashboardDetail
-              title="All selected sources"
-              meta={`${selectedSources.length} source${selectedSources.length === 1 ? "" : "s"}`}
-              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-sources"
-            >
-              <div className="source-list models-dashboard__source-list--detail">
-                {selectedSources.map((source) => (
-                  <div key={`${source.category}-${source.path}`} className={traceabilitySourceItemClass(source.category)}>
-                    <span>{source.category}</span>
-                    <strong>{source.path}</strong>
-                    <p>{source.reason ?? "No reason attached."}</p>
-                  </div>
+          <MetadataAccordion
+            title="Runtime assets"
+            meta={`${runtimeAccordionItems.length} group${runtimeAccordionItems.length === 1 ? "" : "s"}`}
+            tone="runtime"
+            level="top"
+          >
+            {runtimeAccordionItems.length ? (
+              <div className="models-dashboard__metadata-accordion-children">
+                {runtimeAccordionItems.map((item) => (
+                  <MetadataAccordion
+                    key={item.id}
+                    title={item.title}
+                    meta={pluralize(item.values.length, item.isLocalFiles ? "file" : "path")}
+                    tone="runtime"
+                    level="nested"
+                  >
+                    {item.isLocalFiles ? (
+                      <div className="models-dashboard__path-stack models-dashboard__path-stack--single-column">
+                        {item.values.map((path) => (
+                          <div key={path} className="models-dashboard__path-chip">
+                            {path}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="models-dashboard__metadata-accordion-detail">
+                        {item.groups.map((group) => (
+                          <div
+                            key={`${item.id}-${group.key}`}
+                            className="models-dashboard__metadata-accordion-detail-group"
+                          >
+                            {item.groups.length > 1 ||
+                            formatLabel(group.key).toLowerCase() !== item.title.toLowerCase() ? (
+                              <div className="dashboard-chip-row models-dashboard__label-row--metadata">
+                                <span className="dashboard-mini-chip models-dashboard__label-chip">
+                                  {formatLabel(group.key)}
+                                </span>
+                              </div>
+                            ) : null}
+                            <div className="models-dashboard__path-stack">
+                              {group.values.map((value) => (
+                                <div key={`${group.key}-${value}`} className="models-dashboard__path-chip">
+                                  {value}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </MetadataAccordion>
                 ))}
               </div>
-            </DashboardDetail>
-          ) : null}
-
-          <DashboardDetail
-            title="Audit"
-            meta={`${artifactCountEntries.length} group${artifactCountEntries.length === 1 ? "" : "s"}`}
-            className="models-dashboard__detail--traceability models-dashboard__detail--traceability-paths"
+            ) : (
+              <div className="dashboard-empty">
+                <strong>No runtime assets were attached.</strong>
+              </div>
+            )}
+          </MetadataAccordion>
+          <MetadataAccordion
+            title="Diagnostics"
+            meta={artifactCountEntries.length ? `${artifactCountEntries.length} groups` : "advanced"}
+            tone="diagnostic"
+            level="top"
           >
-            {artifactCountEntries.length ? (
-              <>
-                <div className="models-dashboard__mini-fact models-dashboard__mini-fact--hero models-dashboard__mini-fact--traceability-total">
-                  <span>Total audited artifacts</span>
-                  <strong>{artifactInventoryTotal.toLocaleString()}</strong>
+            <div className="models-dashboard__metadata-grid models-dashboard__metadata-grid--summary">
+              {diagnosticsSummaryFacts.map((fact) => (
+                <div key={fact.label} className="models-dashboard__mini-fact models-dashboard__mini-fact--summary">
+                  <span>{fact.label}</span>
+                  <strong>{fact.value}</strong>
                 </div>
+              ))}
+            </div>
+
+            {artifactCountEntries.length ? (
+              <div className="models-dashboard__metadata-section">
+                <div className="dashboard-block__eyebrow">Artifact scan</div>
                 <div className="dashboard-chip-row models-dashboard__artifact-chip-cloud">
                   {artifactCountEntries.map(([key, value]) => (
                     <span key={key} className="dashboard-mini-chip">
@@ -1371,70 +1764,32 @@ export function ModelDashboardPanel({
                     </span>
                   ))}
                 </div>
-              </>
-            ) : (
-              <div className="dashboard-empty">
-                <strong>No source audit counts attached.</strong>
               </div>
-            )}
-          </DashboardDetail>
+            ) : null}
 
-          {artifactPaths ? (
-            <DashboardDetail
-              title="Primary artifact paths"
-              meta={`${Object.keys(artifactPaths).length} path${Object.keys(artifactPaths).length === 1 ? "" : "s"}`}
-              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-paths"
-            >
-              <pre className="dashboard-kv__code">{stringifyStructuredValue(artifactPaths)}</pre>
-            </DashboardDetail>
-          ) : null}
+            {scanRoots.length ? (
+              <div className="models-dashboard__metadata-section">
+                <div className="dashboard-block__eyebrow">Scan roots</div>
+                <pre className="dashboard-kv__code">{stringifyStructuredValue(scanRoots)}</pre>
+              </div>
+            ) : null}
 
-          {artifactsPresent.length ? (
-            <DashboardDetail
-              title="Artifacts present"
-              meta={`${artifactsPresent.length} file${artifactsPresent.length === 1 ? "" : "s"}`}
-              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-present"
-            >
-              <pre className="dashboard-kv__code">{stringifyStructuredValue(artifactsPresent)}</pre>
-            </DashboardDetail>
-          ) : null}
+            {dashboard.manifest ? (
+              <div className="models-dashboard__metadata-section">
+                <div className="dashboard-block__eyebrow">Manifest entrypoints</div>
+                <pre className="dashboard-kv__code">
+                  {stringifyStructuredValue(dashboard.manifest.entrypoints)}
+                </pre>
+              </div>
+            ) : null}
 
-          <DashboardDetail
-            title="Bundles"
-            meta={`${sourceBundleFacts.length} fact${sourceBundleFacts.length === 1 ? "" : "s"}`}
-            className="models-dashboard__detail--traceability models-dashboard__detail--traceability-artifacts"
-          >
-            <div className="models-dashboard__metadata-grid models-dashboard__metadata-grid--compact models-dashboard__metadata-grid--technical">
-              {sourceBundleFacts.map((fact) => (
-                <div key={fact.label} className="models-dashboard__mini-fact models-dashboard__mini-fact--traceability-bundle">
-                  <span>{fact.label}</span>
-                  <strong>{fact.value}</strong>
-                </div>
-              ))}
-            </div>
-          </DashboardDetail>
-
-          {metadataArtifacts ? (
-            <DashboardDetail
-              title="Model artifacts"
-              meta={`${Object.keys(metadataArtifacts).length} group${Object.keys(metadataArtifacts).length === 1 ? "" : "s"}`}
-              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-artifacts"
-            >
-              <pre className="dashboard-kv__code">{stringifyStructuredValue(metadataArtifacts)}</pre>
-            </DashboardDetail>
-          ) : null}
-
-          {dashboard.manifest ? (
-            <DashboardDetail
-              title="Manifest entrypoints"
-              meta={`${Object.keys(dashboard.manifest.entrypoints).length} ref${Object.keys(dashboard.manifest.entrypoints).length === 1 ? "" : "s"}`}
-              className="models-dashboard__detail--traceability models-dashboard__detail--traceability-manifest"
-            >
-              <pre className="dashboard-kv__code">
-                {stringifyStructuredValue(dashboard.manifest.entrypoints)}
-              </pre>
-            </DashboardDetail>
-          ) : null}
+            {metadataModel ? (
+              <div className="models-dashboard__metadata-section">
+                <div className="dashboard-block__eyebrow">Model metadata JSON</div>
+                <pre className="dashboard-kv__code">{stringifyStructuredValue(metadataModel)}</pre>
+              </div>
+            ) : null}
+          </MetadataAccordion>
         </div>
       </article>
 

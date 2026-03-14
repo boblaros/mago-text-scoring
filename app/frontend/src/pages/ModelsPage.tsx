@@ -740,7 +740,6 @@ export function ModelsPage() {
                 {humanizeStatus(modelInfo.status)}
               </span>
               <span className="dashboard-mini-chip">{familyLabel(modelInfo)}</span>
-              <span className="dashboard-mini-chip">{modelInfo.priority}</span>
             </div>
 
             <div className="model-info-grid">
