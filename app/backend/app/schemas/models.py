@@ -146,6 +146,7 @@ class UploadModelMetadata(BaseModel):
     framework_type: Literal["transformers", "pytorch", "sklearn"]
     framework_task: str = "sequence-classification"
     framework_library: str | None = Field(default=None, max_length=80)
+    framework_problem_type: str | None = Field(default=None, max_length=120)
     backbone: str | None = Field(default=None, max_length=120)
     architecture: str | None = Field(default=None, max_length=120)
     base_model: str | None = Field(default=None, max_length=120)
@@ -156,6 +157,7 @@ class UploadModelMetadata(BaseModel):
     runtime_batch_size: int = Field(default=1, ge=1, le=512)
     runtime_truncation: bool = True
     runtime_padding: bool | str = True
+    runtime_preprocessing: str | None = Field(default=None, max_length=240)
     ui_display_name: str | None = Field(default=None, max_length=120)
     color_token: str | None = Field(default=None, max_length=80)
     group: str | None = Field(default=None, max_length=80)
@@ -170,12 +172,14 @@ class UploadModelMetadata(BaseModel):
         "version",
         "framework_task",
         "framework_library",
+        "framework_problem_type",
         "backbone",
         "architecture",
         "base_model",
         "embeddings",
         "output_type",
         "runtime_device",
+        "runtime_preprocessing",
         "ui_display_name",
         "color_token",
         "group",
@@ -198,3 +202,92 @@ class UploadModelMetadata(BaseModel):
         if len(names) != len(value):
             raise ValueError("Label names must be unique.")
         return value
+
+
+class UploadFileDescriptor(BaseModel):
+    name: str = Field(min_length=1, max_length=240)
+    size_bytes: int | None = Field(default=None, ge=0)
+    relative_path: str | None = Field(default=None, max_length=500)
+
+
+class LocalUploadPreflightRequest(BaseModel):
+    registration_mode: Literal["uploaded", "generated"]
+    metadata: UploadModelMetadata
+    artifact_manifest: dict[str, list[UploadFileDescriptor]] = Field(default_factory=dict)
+    dashboard_manifest: list[UploadFileDescriptor] = Field(default_factory=list)
+
+
+class ArtifactValidationSummary(BaseModel):
+    slot: str
+    title: str
+    required: bool
+    valid: bool
+    message: str | None = None
+    files: list[str] = Field(default_factory=list)
+
+
+class LocalUploadPreflightResponse(BaseModel):
+    ready: bool
+    config_source: Literal["uploaded", "generated"]
+    normalized_metadata: UploadModelMetadata
+    config_preview: str
+    artifact_checks: list[ArtifactValidationSummary] = Field(default_factory=list)
+    dashboard_attached: bool = False
+    warnings: list[str] = Field(default_factory=list)
+
+
+class HuggingFacePreflightRequest(BaseModel):
+    repo: str = Field(min_length=3, max_length=240)
+    metadata: UploadModelMetadata
+
+
+class HuggingFaceArtifactCheck(BaseModel):
+    path: str
+    category: str
+    required: bool
+    available: bool
+    size_bytes: int | None = Field(default=None, ge=0)
+    message: str | None = None
+
+
+class HuggingFacePreflightResponse(BaseModel):
+    normalized_repo_id: str
+    repo_url: str
+    detected_framework_type: str | None = None
+    detected_task: str | None = None
+    framework_library: str | None = None
+    architecture: str | None = None
+    backbone: str | None = None
+    base_model: str | None = None
+    estimated_download_size_bytes: int | None = Field(default=None, ge=0)
+    disk_free_bytes: int = Field(ge=0)
+    memory_total_bytes: int | None = Field(default=None, ge=0)
+    memory_estimate_bytes: int | None = Field(default=None, ge=0)
+    runtime_supported: bool
+    compatible: bool
+    ready_to_import: bool
+    required_files: list[HuggingFaceArtifactCheck] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    blocking_reasons: list[str] = Field(default_factory=list)
+    normalized_metadata: UploadModelMetadata
+    config_preview: str
+
+
+class ModelRegistrationResult(BaseModel):
+    model_id: str
+    source: Literal["local", "huggingface"]
+    branch: Literal["local-config-upload", "local-generated-config", "huggingface"]
+    config_source: Literal["uploaded", "generated"]
+    framework_type: str
+    display_name: str
+    domain: str
+    is_active: bool
+    status: ModelHealthStatus
+    status_reason: str | None = None
+    dashboard_status: DashboardAvailability = "missing"
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ModelRegistrationResponse(BaseModel):
+    snapshot: CatalogSnapshotResponse
+    result: ModelRegistrationResult

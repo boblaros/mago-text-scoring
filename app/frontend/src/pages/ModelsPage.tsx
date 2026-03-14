@@ -307,7 +307,8 @@ export function ModelsPage() {
     });
     const isSelected = selectedModelId === model.model_id;
     const isEditing = editingModelId === model.model_id;
-    const reorderDisabled = !managementReady || busyModelId !== null || editingModelId !== null;
+    const reorderDisabled =
+      !managementReady || busyModelId !== null || editingModelId !== null || isUploadOpen;
 
     return (
       <article
@@ -445,7 +446,7 @@ export function ModelsPage() {
           <button
             className="mini-button"
             type="button"
-            disabled={!managementReady}
+            disabled={!managementReady || isUploadOpen}
             onClick={(event) => {
               event.stopPropagation();
               setEditingModelId(model.model_id);
@@ -460,7 +461,8 @@ export function ModelsPage() {
             disabled={
               !managementReady ||
               (!model.can_activate && !model.is_active) ||
-              busyModelId === model.model_id
+              busyModelId === model.model_id ||
+              isUploadOpen
             }
             onClick={(event) => {
               event.stopPropagation();
@@ -474,7 +476,7 @@ export function ModelsPage() {
           <button
             className="mini-button mini-button--danger"
             type="button"
-            disabled={!managementReady || busyModelId === model.model_id}
+            disabled={!managementReady || busyModelId === model.model_id || isUploadOpen}
             onClick={(event) => {
               event.stopPropagation();
               const confirmed = window.confirm(
@@ -548,7 +550,7 @@ export function ModelsPage() {
             <button
               className="primary-button models-management__upload-button"
               type="button"
-              disabled={!managementReady}
+              disabled={!managementReady || isUploadOpen}
               onClick={() => setIsUploadOpen(true)}
             >
               Upload model
@@ -563,17 +565,6 @@ export function ModelsPage() {
             </div>
           ) : null}
           {mutationError ? <div className="inline-alert">{mutationError}</div> : null}
-
-          {isUploadOpen && managementReady ? (
-            <ModelUploadWizard
-              isOpen={isUploadOpen}
-              onClose={() => setIsUploadOpen(false)}
-              onSuccess={(snapshot, modelId) => {
-                applyManagementSnapshot(snapshot);
-                setSelectedModelId(modelId);
-              }}
-            />
-          ) : null}
 
           {isLoading && !models.length ? (
             <div className="dashboard-empty">
@@ -706,6 +697,23 @@ export function ModelsPage() {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {isUploadOpen && managementReady ? (
+        <ModelUploadWizard
+          isOpen={isUploadOpen}
+          domains={managementDomains.map((domain) => ({
+            domain: domain.domain,
+            display_name: domain.display_name,
+            color_token: domain.color_token,
+            group: domain.group,
+          }))}
+          onClose={() => setIsUploadOpen(false)}
+          onSuccess={(snapshot, modelId) => {
+            applyManagementSnapshot(snapshot);
+            setSelectedModelId(modelId);
+          }}
+        />
       ) : null}
 
       {modelInfo ? (

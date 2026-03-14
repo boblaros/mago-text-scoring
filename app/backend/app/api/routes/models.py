@@ -5,15 +5,24 @@ from fastapi.responses import FileResponse
 from starlette.datastructures import UploadFile
 
 from app.api.dependencies import get_registry_dependency
-from app.registry.model_registry import ModelRegistry, UploadedPayload
+from app.registry.model_registry import (
+    ModelRegistry,
+    RegistryValidationError,
+    RegistrationOutcome,
+    UploadedPayload,
+)
 from app.schemas.models import (
     CatalogSnapshotResponse,
     DomainCatalogEntry,
     DomainCatalogModel,
+    HuggingFacePreflightRequest,
+    HuggingFacePreflightResponse,
+    LocalUploadPreflightRequest,
+    LocalUploadPreflightResponse,
+    ModelRegistrationResponse,
     ModelDashboardResponse,
     ModelPatchRequest,
     ModelReorderRequest,
-    UploadModelMetadata,
 )
 
 
@@ -70,11 +79,11 @@ def delete_model(
     return _build_snapshot_response(snapshot)
 
 
-@router.post("/models/upload", response_model=CatalogSnapshotResponse)
-async def upload_model(
+@router.post("/models/local/preflight", response_model=LocalUploadPreflightResponse)
+async def preflight_local_upload(
     request: Request,
     registry: ModelRegistry = Depends(get_registry_dependency),
-) -> CatalogSnapshotResponse:
+) -> LocalUploadPreflightResponse:
     try:
         form = await request.form()
     except Exception as exc:
@@ -86,23 +95,116 @@ async def upload_model(
             ),
         ) from exc
 
-    metadata = form.get("metadata")
-    if not isinstance(metadata, str):
-        raise HTTPException(status_code=422, detail="Upload metadata is missing.")
+    raw_payload = form.get("payload")
+    if not isinstance(raw_payload, str):
+        raise HTTPException(status_code=422, detail=_validation_detail("Upload payload is missing."))
+
+    registration_config_files = _collect_uploads(form.getlist("registration_config_files"))
+
+    artifact_files = _collect_uploads(form.getlist("artifact_files"))
+    if artifact_files:
+        raise HTTPException(
+            status_code=422,
+            detail=_validation_detail(
+                "Artifact binaries should only be sent during the final import step."
+            ),
+        )
+
+    try:
+        payload = LocalUploadPreflightRequest.model_validate_json(raw_payload)
+        return registry.preflight_local_upload(
+            payload,
+            registration_config_uploads=await _consume_uploads(registration_config_files),
+        )
+    except RegistryValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=_validation_detail(str(exc), exc.field_errors),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=_validation_detail(str(exc)),
+        ) from exc
+
+
+@router.post("/models/local/import", response_model=ModelRegistrationResponse)
+async def import_local_model(
+    request: Request,
+    registry: ModelRegistry = Depends(get_registry_dependency),
+) -> ModelRegistrationResponse:
+    try:
+        form = await request.form()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Multipart form parsing is unavailable in the backend environment. "
+                "Install backend dependencies and restart the server."
+            ),
+        ) from exc
+
+    raw_payload = form.get("payload")
+    if not isinstance(raw_payload, str):
+        raise HTTPException(status_code=422, detail=_validation_detail("Upload payload is missing."))
 
     artifact_files = _collect_uploads(form.getlist("artifact_files"))
     dashboard_files = _collect_uploads(form.getlist("dashboard_files"))
+    registration_config_files = _collect_uploads(form.getlist("registration_config_files"))
 
     try:
-        payload = UploadModelMetadata.model_validate_json(metadata)
-        snapshot = registry.upload_model(
+        payload = LocalUploadPreflightRequest.model_validate_json(raw_payload)
+        outcome = registry.register_local_upload(
             payload,
             artifact_uploads=await _consume_uploads(artifact_files),
             dashboard_uploads=await _consume_uploads(dashboard_files),
+            registration_config_uploads=await _consume_uploads(registration_config_files),
         )
+    except RegistryValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=_validation_detail(str(exc), exc.field_errors),
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return _build_snapshot_response(snapshot)
+        raise HTTPException(
+            status_code=422,
+            detail=_validation_detail(str(exc)),
+        ) from exc
+    return _build_registration_response(outcome)
+
+
+@router.post("/models/huggingface/preflight", response_model=HuggingFacePreflightResponse)
+def preflight_huggingface_import(
+    payload: HuggingFacePreflightRequest,
+    registry: ModelRegistry = Depends(get_registry_dependency),
+) -> HuggingFacePreflightResponse:
+    try:
+        return registry.preflight_huggingface_import(payload)
+    except RegistryValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=_validation_detail(str(exc), exc.field_errors),
+        ) from exc
+
+
+@router.post("/models/huggingface/import", response_model=ModelRegistrationResponse)
+def import_huggingface_model(
+    payload: HuggingFacePreflightRequest,
+    registry: ModelRegistry = Depends(get_registry_dependency),
+) -> ModelRegistrationResponse:
+    try:
+        outcome = registry.import_huggingface_model(payload)
+    except RegistryValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=_validation_detail(str(exc), exc.field_errors),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=_validation_detail(str(exc)),
+        ) from exc
+    return _build_registration_response(outcome)
 
 
 @router.get("/models/{model_id}/dashboard", response_model=ModelDashboardResponse)
@@ -184,3 +286,20 @@ def _build_domain_entries(entries: list[dict]) -> list[DomainCatalogEntry]:
         )
         for entry in entries
     ]
+
+
+def _build_registration_response(outcome: RegistrationOutcome) -> ModelRegistrationResponse:
+    return ModelRegistrationResponse(
+        snapshot=_build_snapshot_response(outcome.snapshot),
+        result=outcome.result,
+    )
+
+
+def _validation_detail(
+    message: str,
+    field_errors: dict[str, str] | None = None,
+) -> dict[str, object]:
+    detail: dict[str, object] = {"message": message}
+    if field_errors:
+        detail["field_errors"] = field_errors
+    return detail

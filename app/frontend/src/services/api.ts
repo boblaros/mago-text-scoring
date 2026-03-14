@@ -3,6 +3,11 @@ import type {
   AnalysisResponse,
   CatalogSnapshotResponse,
   DomainCatalogResponse,
+  HuggingFacePreflightRequest,
+  HuggingFacePreflightResponse,
+  LocalUploadPreflightRequest,
+  LocalUploadPreflightResponse,
+  ModelRegistrationResponse,
   ModelDashboardResponse,
   ModelPatchRequest,
   ModelReorderRequest,
@@ -33,6 +38,36 @@ function buildModelDashboardAssetUrl(modelId: string, assetPath: string): string
   );
 }
 
+export interface ApiValidationDetail {
+  message?: string;
+  field_errors?: Record<string, string>;
+}
+
+export class ApiRequestError extends Error {
+  status: number;
+  detail?: unknown;
+
+  constructor(message: string, status: number, detail?: unknown) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+function extractErrorMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (detail && typeof detail === "object" && "message" in detail) {
+    const message = (detail as ApiValidationDetail).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+  return fallback;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData;
   let response: Response;
@@ -61,15 +96,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (contentType.includes("application/json")) {
       const body = (await response.json()) as { detail?: unknown };
       const detail = body.detail;
-      if (typeof detail === "string") {
-        throw new Error(detail);
-      }
-      if (detail && typeof detail === "object") {
-        throw new Error(JSON.stringify(detail));
-      }
+      throw new ApiRequestError(
+        extractErrorMessage(detail, `Request failed with status ${response.status}`),
+        response.status,
+        detail,
+      );
     }
     const body = await response.text();
-    throw new Error(body || `Request failed with status ${response.status}`);
+    throw new ApiRequestError(
+      body || `Request failed with status ${response.status}`,
+      response.status,
+      body,
+    );
   }
 
   return (await response.json()) as T;
@@ -117,10 +155,47 @@ export async function deleteModel(modelId: string): Promise<CatalogSnapshotRespo
   });
 }
 
-export async function uploadModel(formData: FormData): Promise<CatalogSnapshotResponse> {
-  return request<CatalogSnapshotResponse>("/models/upload", {
+export async function preflightLocalUpload(
+  formData: FormData,
+  signal?: AbortSignal,
+): Promise<LocalUploadPreflightResponse> {
+  return request<LocalUploadPreflightResponse>("/models/local/preflight", {
     method: "POST",
     body: formData,
+    signal,
+  });
+}
+
+export async function importLocalModel(
+  formData: FormData,
+  signal?: AbortSignal,
+): Promise<ModelRegistrationResponse> {
+  return request<ModelRegistrationResponse>("/models/local/import", {
+    method: "POST",
+    body: formData,
+    signal,
+  });
+}
+
+export async function preflightHuggingFaceImport(
+  payload: HuggingFacePreflightRequest,
+  signal?: AbortSignal,
+): Promise<HuggingFacePreflightResponse> {
+  return request<HuggingFacePreflightResponse>("/models/huggingface/preflight", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
+export async function importHuggingFaceModel(
+  payload: HuggingFacePreflightRequest,
+  signal?: AbortSignal,
+): Promise<ModelRegistrationResponse> {
+  return request<ModelRegistrationResponse>("/models/huggingface/import", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    signal,
   });
 }
 

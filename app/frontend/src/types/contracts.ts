@@ -174,6 +174,7 @@ export interface UploadModelMetadata {
   framework_type: "transformers" | "pytorch" | "sklearn";
   framework_task: string;
   framework_library?: string | null;
+  framework_problem_type?: string | null;
   backbone?: string | null;
   architecture?: string | null;
   base_model?: string | null;
@@ -184,11 +185,101 @@ export interface UploadModelMetadata {
   runtime_batch_size: number;
   runtime_truncation: boolean;
   runtime_padding: boolean | string;
+  runtime_preprocessing?: string | null;
   ui_display_name?: string | null;
   color_token?: string | null;
   group?: string | null;
   labels: UploadLabelClass[];
   model_config: Record<string, unknown>;
+}
+
+export interface UploadFileDescriptor {
+  name: string;
+  size_bytes?: number | null;
+  relative_path?: string | null;
+}
+
+export interface ArtifactValidationSummary {
+  slot: string;
+  title: string;
+  required: boolean;
+  valid: boolean;
+  message?: string | null;
+  files: string[];
+}
+
+export interface LocalUploadPreflightRequest {
+  registration_mode: "uploaded" | "generated";
+  metadata: UploadModelMetadata;
+  artifact_manifest: Record<string, UploadFileDescriptor[]>;
+  dashboard_manifest: UploadFileDescriptor[];
+}
+
+export interface LocalUploadPreflightResponse {
+  ready: boolean;
+  config_source: "uploaded" | "generated";
+  normalized_metadata: UploadModelMetadata;
+  config_preview: string;
+  artifact_checks: ArtifactValidationSummary[];
+  dashboard_attached: boolean;
+  warnings: string[];
+}
+
+export interface HuggingFacePreflightRequest {
+  repo: string;
+  metadata: UploadModelMetadata;
+}
+
+export interface HuggingFaceArtifactCheck {
+  path: string;
+  category: string;
+  required: boolean;
+  available: boolean;
+  size_bytes?: number | null;
+  message?: string | null;
+}
+
+export interface HuggingFacePreflightResponse {
+  normalized_repo_id: string;
+  repo_url: string;
+  detected_framework_type?: string | null;
+  detected_task?: string | null;
+  framework_library?: string | null;
+  architecture?: string | null;
+  backbone?: string | null;
+  base_model?: string | null;
+  estimated_download_size_bytes?: number | null;
+  disk_free_bytes: number;
+  memory_total_bytes?: number | null;
+  memory_estimate_bytes?: number | null;
+  runtime_supported: boolean;
+  compatible: boolean;
+  ready_to_import: boolean;
+  required_files: HuggingFaceArtifactCheck[];
+  warnings: string[];
+  blocking_reasons: string[];
+  normalized_metadata: UploadModelMetadata;
+  config_preview: string;
+}
+
+export interface ModelRegistrationResult {
+  model_id: string;
+  source: "local" | "huggingface";
+  branch: "local-config-upload" | "local-generated-config" | "huggingface";
+  config_source: "uploaded" | "generated";
+  framework_type: string;
+  display_name: string;
+  domain: string;
+  is_active: boolean;
+  status: "ready" | "missing_artifacts" | "incompatible";
+  status_reason?: string | null;
+  dashboard_status: "missing" | "partial" | "available";
+  warnings: string[];
+}
+
+export interface ModelRegistrationResponse {
+  snapshot: CatalogSnapshotResponse;
+  result: ModelRegistrationResult;
 }
 
 export type PipelinePhase =

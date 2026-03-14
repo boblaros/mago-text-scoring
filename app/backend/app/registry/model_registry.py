@@ -7,7 +7,7 @@ import threading
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 import yaml
 
@@ -15,7 +15,22 @@ from app.inference.factory import InferencePluginRegistry
 from app.registry.artifacts import resolve_artifacts
 from app.registry.contracts import ModelManifest, RegisteredModel
 from app.registry.dashboard_loader import load_model_dashboard, summarize_dashboard
-from app.schemas.models import UploadModelMetadata
+from app.schemas.models import (
+    ArtifactValidationSummary,
+    HuggingFaceArtifactCheck,
+    HuggingFacePreflightRequest,
+    HuggingFacePreflightResponse,
+    LocalUploadPreflightRequest,
+    LocalUploadPreflightResponse,
+    ModelRegistrationResult,
+    UploadFileDescriptor,
+    UploadLabelClass,
+    UploadModelMetadata,
+)
+from app.services.huggingface_import import (
+    HuggingFaceImportService,
+    HuggingFaceInspection,
+)
 
 
 @dataclass(slots=True)
@@ -32,6 +47,27 @@ class ArtifactRequirement:
     max_files: int | None
     allowed_extensions: tuple[str, ...]
     description: str
+
+    @property
+    def title(self) -> str:
+        return self.slot.replace("_", " ").title()
+
+
+class RegistryValidationError(ValueError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        field_errors: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.field_errors = field_errors or {}
+
+
+@dataclass(frozen=True, slots=True)
+class RegistrationOutcome:
+    snapshot: dict[str, list[dict]]
+    result: ModelRegistrationResult
 
 
 ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
@@ -157,9 +193,16 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
 
 
 class ModelRegistry:
-    def __init__(self, settings, plugin_registry: InferencePluginRegistry) -> None:
+    def __init__(
+        self,
+        settings,
+        plugin_registry: InferencePluginRegistry,
+        *,
+        hf_import_service: HuggingFaceImportService | None = None,
+    ) -> None:
         self._settings = settings
         self._plugin_registry = plugin_registry
+        self._hf_import_service = hf_import_service or HuggingFaceImportService(settings)
         self._models_by_domain: dict[str, list[RegisteredModel]] = defaultdict(list)
         self._runner_cache: dict[str, object] = {}
         self._lock = threading.Lock()
@@ -320,14 +363,82 @@ class ModelRegistry:
         self.discover()
         return self.snapshot()
 
-    def upload_model(
+    def preflight_local_upload(
         self,
-        metadata: UploadModelMetadata,
+        payload: LocalUploadPreflightRequest,
+        *,
+        registration_config_uploads: list[UploadedPayload],
+    ) -> LocalUploadPreflightResponse:
+        metadata = self._normalize_metadata(payload.metadata)
+        self._ensure_model_id_available(metadata.model_id)
+
+        warnings: list[str] = []
+        if payload.registration_mode == "uploaded":
+            registration_manifest, registration_warnings = self._load_uploaded_registration_manifest(
+                metadata,
+                registration_config_uploads,
+            )
+            metadata = self._merge_metadata_with_registration_manifest(
+                metadata,
+                registration_manifest,
+            )
+            warnings.extend(registration_warnings)
+
+        artifact_checks, field_errors = self._artifact_selection_checks(
+            metadata.framework_type,
+            payload.artifact_manifest,
+        )
+        warnings.extend(self._dashboard_selection_warnings(payload.dashboard_manifest))
+        if field_errors:
+            raise RegistryValidationError(
+                "Resolve the highlighted file issues before continuing.",
+                field_errors=field_errors,
+            )
+
+        planned_artifacts = _planned_artifact_manifest(
+            metadata.framework_type,
+            {
+                slot: [descriptor.name for descriptor in descriptors]
+                for slot, descriptors in payload.artifact_manifest.items()
+            },
+        )
+        manifest = self._build_manifest(
+            metadata=metadata,
+            canonical_domain=self._canonicalize_domain(metadata.domain),
+            artifact_manifest=planned_artifacts,
+        )
+        return LocalUploadPreflightResponse(
+            ready=True,
+            config_source=payload.registration_mode,
+            normalized_metadata=metadata,
+            config_preview=self._build_manifest_preview(manifest),
+            artifact_checks=artifact_checks,
+            dashboard_attached=bool(payload.dashboard_manifest),
+            warnings=list(dict.fromkeys(warnings)),
+        )
+
+    def register_local_upload(
+        self,
+        payload: LocalUploadPreflightRequest,
+        *,
         artifact_uploads: list[UploadedPayload],
         dashboard_uploads: list[UploadedPayload],
-    ) -> dict[str, list[dict]]:
-        if any(existing.manifest.model_id == metadata.model_id for existing in self.get_models()):
-            raise ValueError(f"Model id '{metadata.model_id}' already exists.")
+        registration_config_uploads: list[UploadedPayload],
+    ) -> RegistrationOutcome:
+        metadata = self._normalize_metadata(payload.metadata)
+        self._ensure_model_id_available(metadata.model_id)
+
+        warnings: list[str] = []
+        if payload.registration_mode == "uploaded":
+            registration_manifest, registration_warnings = self._load_uploaded_registration_manifest(
+                metadata,
+                registration_config_uploads,
+            )
+            metadata = self._merge_metadata_with_registration_manifest(
+                metadata,
+                registration_manifest,
+            )
+            warnings.extend(registration_warnings)
 
         canonical_domain = self._canonicalize_domain(metadata.domain)
         model_dir = self._allocate_model_dir(canonical_domain, metadata.model_id)
@@ -358,7 +469,10 @@ class ModelRegistry:
             )
             _, can_activate, reason = self._model_runtime_status(registered)
             if metadata.enable_on_upload and not can_activate:
-                raise ValueError(reason or "The uploaded model cannot be activated.")
+                raise RegistryValidationError(
+                    reason or "The uploaded model cannot be activated.",
+                    field_errors={"metadata.enable_on_upload": reason or "Activation is blocked."},
+                )
 
             if metadata.enable_on_upload:
                 self._deactivate_domain_models(canonical_domain)
@@ -370,7 +484,151 @@ class ModelRegistry:
             raise
 
         self.discover()
-        return self.snapshot()
+        return RegistrationOutcome(
+            snapshot=self.snapshot(),
+            result=self._build_registration_result(
+                metadata.model_id,
+                source="local",
+                branch=(
+                    "local-config-upload"
+                    if payload.registration_mode == "uploaded"
+                    else "local-generated-config"
+                ),
+                config_source=payload.registration_mode,
+                warnings=list(dict.fromkeys(warnings)),
+            ),
+        )
+
+    def preflight_huggingface_import(
+        self,
+        payload: HuggingFacePreflightRequest,
+    ) -> HuggingFacePreflightResponse:
+        self._ensure_model_id_available(payload.metadata.model_id)
+        try:
+            inspection = self._hf_import_service.inspect(payload.repo)
+        except ValueError as exc:
+            raise RegistryValidationError(
+                str(exc),
+                field_errors={"huggingface.repo": str(exc)},
+            ) from exc
+
+        metadata = self._metadata_from_hf_request(payload.metadata, inspection)
+        planned_artifacts = _planned_artifact_manifest(
+            metadata.framework_type,
+            {
+                slot: [file.path for file in files]
+                for slot, files in inspection.download_plan.items()
+            },
+        )
+        manifest = self._build_manifest(
+            metadata=metadata,
+            canonical_domain=self._canonicalize_domain(metadata.domain),
+            artifact_manifest=planned_artifacts,
+        )
+
+        return HuggingFacePreflightResponse(
+            normalized_repo_id=inspection.repo_id,
+            repo_url=inspection.repo_url,
+            detected_framework_type=inspection.detected_framework_type,
+            detected_task=inspection.detected_task,
+            framework_library=inspection.framework_library,
+            architecture=inspection.architecture,
+            backbone=inspection.backbone,
+            base_model=inspection.base_model,
+            estimated_download_size_bytes=inspection.estimated_download_size_bytes,
+            disk_free_bytes=inspection.disk_free_bytes,
+            memory_total_bytes=inspection.memory_total_bytes,
+            memory_estimate_bytes=inspection.memory_estimate_bytes,
+            runtime_supported=inspection.runtime_supported,
+            compatible=inspection.compatible,
+            ready_to_import=inspection.ready_to_import,
+            required_files=[
+                HuggingFaceArtifactCheck(
+                    path=file.path,
+                    category=file.category,
+                    required=file.required,
+                    available=file.message is None,
+                    size_bytes=file.size_bytes,
+                    message=file.message,
+                )
+                for file in inspection.required_files
+            ],
+            warnings=inspection.warnings,
+            blocking_reasons=inspection.blocking_reasons,
+            normalized_metadata=metadata,
+            config_preview=self._build_manifest_preview(manifest),
+        )
+
+    def import_huggingface_model(
+        self,
+        payload: HuggingFacePreflightRequest,
+    ) -> RegistrationOutcome:
+        self._ensure_model_id_available(payload.metadata.model_id)
+        try:
+            inspection = self._hf_import_service.inspect(payload.repo)
+        except ValueError as exc:
+            raise RegistryValidationError(
+                str(exc),
+                field_errors={"huggingface.repo": str(exc)},
+            ) from exc
+
+        if not inspection.ready_to_import:
+            message = inspection.blocking_reasons[0] if inspection.blocking_reasons else (
+                "This Hugging Face repo cannot be imported."
+            )
+            raise RegistryValidationError(
+                message,
+                field_errors={"huggingface.repo": message},
+            )
+
+        metadata = self._metadata_from_hf_request(payload.metadata, inspection)
+        canonical_domain = self._canonicalize_domain(metadata.domain)
+        model_dir = self._allocate_model_dir(canonical_domain, metadata.model_id)
+        model_dir.mkdir(parents=True, exist_ok=False)
+
+        try:
+            artifact_manifest = self._hf_import_service.download_to_directory(inspection, model_dir)
+            manifest = self._build_manifest(
+                metadata=metadata,
+                canonical_domain=canonical_domain,
+                artifact_manifest=artifact_manifest,
+            )
+            self._write_manifest(model_dir / "model-config.yaml", manifest)
+
+            registered = RegisteredModel(
+                manifest=manifest,
+                config_path=model_dir / "model-config.yaml",
+                model_dir=model_dir,
+                canonical_domain=canonical_domain,
+                artifact_resolution=resolve_artifacts(model_dir, manifest),
+            )
+            _, can_activate, reason = self._model_runtime_status(registered)
+            if metadata.enable_on_upload and not can_activate:
+                raise RegistryValidationError(
+                    reason or "The imported model cannot be activated.",
+                    field_errors={"metadata.enable_on_upload": reason or "Activation is blocked."},
+                )
+
+            if metadata.enable_on_upload:
+                self._deactivate_domain_models(canonical_domain)
+                manifest.is_active = True
+                self._write_manifest(model_dir / "model-config.yaml", manifest)
+
+        except Exception:
+            shutil.rmtree(model_dir, ignore_errors=True)
+            raise
+
+        self.discover()
+        return RegistrationOutcome(
+            snapshot=self.snapshot(),
+            result=self._build_registration_result(
+                metadata.model_id,
+                source="huggingface",
+                branch="huggingface",
+                config_source="generated",
+                warnings=inspection.warnings,
+            ),
+        )
 
     def load_dashboard(self, model_id: str, asset_url_builder) -> object:
         model = self.get_model(model_id)
@@ -404,6 +662,7 @@ class ModelRegistry:
                 "type": metadata.framework_type,
                 "task": metadata.framework_task,
                 "library": metadata.framework_library,
+                "problem_type": metadata.framework_problem_type,
                 "backbone": metadata.backbone,
                 "architecture": metadata.architecture,
                 "base_model": metadata.base_model,
@@ -417,6 +676,7 @@ class ModelRegistry:
                 "padding": metadata.runtime_padding,
                 "batch_size": metadata.runtime_batch_size,
                 "device": metadata.runtime_device,
+                "preprocessing": metadata.runtime_preprocessing,
             },
             "labels": {
                 "type": metadata.output_type,
@@ -433,6 +693,254 @@ class ModelRegistry:
             },
         }
         return ModelManifest.from_yaml_dict(payload)
+
+    def _build_manifest_preview(self, manifest: ModelManifest) -> str:
+        return yaml.safe_dump(
+            manifest.to_yaml_dict(),
+            sort_keys=False,
+            allow_unicode=False,
+        )
+
+    def _build_registration_result(
+        self,
+        model_id: str,
+        *,
+        source: str,
+        branch: str,
+        config_source: str,
+        warnings: list[str],
+    ) -> ModelRegistrationResult:
+        model = self.get_model(model_id)
+        serialized = self._serialize_model(model)
+        return ModelRegistrationResult(
+            model_id=model_id,
+            source=source,
+            branch=branch,
+            config_source=config_source,
+            framework_type=str(serialized["framework_type"]),
+            display_name=str(serialized["display_name"]),
+            domain=str(serialized["domain"]),
+            is_active=bool(serialized["is_active"]),
+            status=str(serialized["status"]),
+            status_reason=serialized.get("status_reason"),
+            dashboard_status=str(serialized["dashboard_status"]),
+            warnings=warnings,
+        )
+
+    def _metadata_from_hf_request(
+        self,
+        metadata: UploadModelMetadata,
+        inspection: HuggingFaceInspection,
+    ) -> UploadModelMetadata:
+        labels = metadata.labels
+        if inspection.labels and _labels_are_placeholder(labels):
+            labels = [UploadLabelClass.model_validate(label) for label in inspection.labels]
+
+        return self._normalize_metadata(
+            metadata.model_copy(
+                update={
+                    "framework_type": inspection.detected_framework_type
+                    or metadata.framework_type,
+                    "framework_task": inspection.detected_task or metadata.framework_task,
+                    "framework_library": inspection.framework_library
+                    or metadata.framework_library,
+                    "framework_problem_type": metadata.framework_problem_type
+                    or "single_label_classification",
+                    "backbone": metadata.backbone or inspection.backbone,
+                    "architecture": metadata.architecture or inspection.architecture,
+                    "base_model": metadata.base_model or inspection.base_model,
+                    "labels": labels,
+                    "model_payload": metadata.model_payload or inspection.model_payload,
+                }
+            )
+        )
+
+    def _merge_metadata_with_registration_manifest(
+        self,
+        metadata: UploadModelMetadata,
+        manifest: ModelManifest,
+    ) -> UploadModelMetadata:
+        labels = metadata.labels
+        if _labels_are_placeholder(labels) and manifest.labels:
+            labels = [
+                UploadLabelClass(
+                    id=label.id,
+                    name=label.name,
+                    display_name=label.display_name,
+                )
+                for label in manifest.labels
+            ]
+
+        return self._normalize_metadata(
+            metadata.model_copy(
+                update={
+                    "description": metadata.description or manifest.description,
+                    "version": metadata.version or manifest.version,
+                    "framework_library": metadata.framework_library
+                    or manifest.framework.library,
+                    "framework_problem_type": metadata.framework_problem_type
+                    or manifest.framework.problem_type,
+                    "backbone": metadata.backbone or manifest.framework.backbone,
+                    "architecture": metadata.architecture or manifest.framework.architecture,
+                    "base_model": metadata.base_model or manifest.framework.base_model,
+                    "embeddings": metadata.embeddings or manifest.framework.embeddings,
+                    "output_type": metadata.output_type or manifest.label_type,
+                    "runtime_device": _prefer_manifest_value(
+                        metadata.runtime_device,
+                        "auto",
+                        manifest.runtime.device,
+                    ),
+                    "runtime_max_sequence_length": _prefer_manifest_value(
+                        metadata.runtime_max_sequence_length,
+                        256,
+                        manifest.runtime.max_sequence_length,
+                    ),
+                    "runtime_batch_size": _prefer_manifest_value(
+                        metadata.runtime_batch_size,
+                        1,
+                        manifest.runtime.batch_size,
+                    ),
+                    "runtime_truncation": _prefer_manifest_value(
+                        metadata.runtime_truncation,
+                        True,
+                        manifest.runtime.truncation,
+                    ),
+                    "runtime_padding": _prefer_manifest_value(
+                        metadata.runtime_padding,
+                        True,
+                        manifest.runtime.padding,
+                    ),
+                    "runtime_preprocessing": metadata.runtime_preprocessing
+                    or manifest.runtime.preprocessing,
+                    "ui_display_name": metadata.ui_display_name
+                    or manifest.ui.domain_display_name,
+                    "color_token": metadata.color_token or manifest.ui.color_token,
+                    "group": metadata.group or manifest.ui.group,
+                    "labels": labels,
+                    "model_payload": metadata.model_payload or manifest.model,
+                }
+            )
+        )
+
+    def _load_uploaded_registration_manifest(
+        self,
+        metadata: UploadModelMetadata,
+        uploads: list[UploadedPayload],
+    ) -> tuple[ModelManifest, list[str]]:
+        if not uploads:
+            raise RegistryValidationError(
+                "Upload the existing registration config before continuing.",
+                field_errors={"registration_config": "Upload the existing registration config."},
+            )
+
+        warnings: list[str] = []
+        if len(uploads) > 1:
+            warnings.append(
+                "Only the first uploaded registration config is used for validation and normalization."
+            )
+
+        manifest = _parse_uploaded_registration_manifest(uploads[0])
+        if manifest.framework.type != metadata.framework_type:
+            raise RegistryValidationError(
+                "The uploaded config does not match the selected model type.",
+                field_errors={
+                    "registration_config": (
+                        "The uploaded config framework does not match the selected model type."
+                    )
+                },
+            )
+        if manifest.model_id != metadata.model_id:
+            warnings.append(
+                "The uploaded config uses a different model id. The wizard value will be saved."
+            )
+        if self._canonicalize_domain(manifest.domain) != self._canonicalize_domain(metadata.domain):
+            warnings.append(
+                "The uploaded config uses a different domain. The wizard value will be saved."
+            )
+        if manifest.display_name != metadata.display_name:
+            warnings.append(
+                "The uploaded config uses a different display name. The wizard value will be saved."
+            )
+        return manifest, warnings
+
+    def _normalize_metadata(self, metadata: UploadModelMetadata) -> UploadModelMetadata:
+        framework_library = metadata.framework_library or _default_framework_library(
+            metadata.framework_type
+        )
+        canonical_domain = self._canonicalize_domain(metadata.domain)
+        return metadata.model_copy(
+            update={
+                "domain": canonical_domain,
+                "framework_library": framework_library,
+                "ui_display_name": metadata.ui_display_name or canonical_domain.title(),
+                "color_token": metadata.color_token or canonical_domain,
+                "group": metadata.group or f"{canonical_domain}-custom",
+            }
+        )
+
+    def _ensure_model_id_available(self, model_id: str) -> None:
+        if any(existing.manifest.model_id == model_id for existing in self.get_models()):
+            raise RegistryValidationError(
+                f"Model id '{model_id}' already exists.",
+                field_errors={"metadata.model_id": "Choose a unique model id."},
+            )
+
+    def _artifact_selection_checks(
+        self,
+        framework_type: str,
+        artifact_manifest: dict[str, list[UploadFileDescriptor]],
+    ) -> tuple[list[ArtifactValidationSummary], dict[str, str]]:
+        requirements = ARTIFACT_REQUIREMENTS.get(framework_type)
+        if requirements is None:
+            raise RegistryValidationError(
+                f"Unsupported framework type '{framework_type}'.",
+                field_errors={"metadata.framework_type": "Unsupported model type."},
+            )
+
+        summaries: list[ArtifactValidationSummary] = []
+        field_errors: dict[str, str] = {}
+        supported_slots = {requirement.slot for requirement in requirements}
+
+        for slot in artifact_manifest:
+            if slot not in supported_slots:
+                field_errors[f"artifacts.{slot}"] = "This artifact slot is not used for the selected model type."
+
+        for requirement in requirements:
+            descriptors = artifact_manifest.get(requirement.slot, [])
+            files = [Path(descriptor.name).name for descriptor in descriptors]
+            error = _artifact_requirement_error(framework_type, requirement, files)
+            if error is not None:
+                field_errors[f"artifacts.{requirement.slot}"] = error
+            summaries.append(
+                ArtifactValidationSummary(
+                    slot=requirement.slot,
+                    title=requirement.title,
+                    required=requirement.required,
+                    valid=error is None,
+                    message=error,
+                    files=files,
+                )
+            )
+
+        return summaries, field_errors
+
+    def _dashboard_selection_warnings(
+        self,
+        dashboard_manifest: list[UploadFileDescriptor],
+    ) -> list[str]:
+        if not dashboard_manifest:
+            return []
+
+        references = [
+            descriptor.relative_path or descriptor.name
+            for descriptor in dashboard_manifest
+        ]
+        if not any(reference.replace("\\", "/").endswith("dashboard-manifest.json") for reference in references):
+            raise RegistryValidationError(
+                "Dashboard bundle must include dashboard-manifest.json.",
+                field_errors={"dashboard": "Dashboard bundle must include dashboard-manifest.json."},
+            )
+        return []
 
     def _deactivate_domain_models(
         self,
@@ -636,6 +1144,124 @@ def _load_manifest(config_path: Path) -> ModelManifest:
     return ModelManifest.from_yaml_dict(raw)
 
 
+def _parse_uploaded_registration_manifest(upload: UploadedPayload) -> ModelManifest:
+    try:
+        raw = yaml.safe_load(upload.content.decode("utf-8"))
+    except Exception as exc:
+        raise RegistryValidationError(
+            "The uploaded registration config is not valid YAML or JSON.",
+            field_errors={"registration_config": "The uploaded registration config is invalid."},
+        ) from exc
+
+    if not isinstance(raw, dict):
+        raise RegistryValidationError(
+            "The uploaded registration config must be an object.",
+            field_errors={"registration_config": "The uploaded registration config must be an object."},
+        )
+
+    try:
+        return ModelManifest.from_yaml_dict(raw)
+    except Exception as exc:
+        raise RegistryValidationError(
+            "The uploaded registration config does not match the expected manifest structure.",
+            field_errors={
+                "registration_config": (
+                    "The uploaded registration config does not match the expected manifest structure."
+                )
+            },
+        ) from exc
+
+
+def _default_framework_library(framework_type: str) -> str:
+    if framework_type == "transformers":
+        return "huggingface"
+    if framework_type == "pytorch":
+        return "torch"
+    if framework_type == "sklearn":
+        return "sklearn"
+    return framework_type
+
+
+def _prefer_manifest_value(current: Any, default: Any, candidate: Any) -> Any:
+    if current == default and candidate not in {None, ""}:
+        return candidate
+    return current
+
+
+def _labels_are_placeholder(labels: list[UploadLabelClass]) -> bool:
+    if len(labels) != 1:
+        return False
+    label = labels[0]
+    return label.id == 0 and label.name == "class_0"
+
+
+def _artifact_requirement_error(
+    framework_type: str,
+    requirement: ArtifactRequirement,
+    files: list[str],
+) -> str | None:
+    if requirement.required and len(files) < requirement.min_files:
+        return (
+            f"{requirement.title} requires at least {requirement.min_files} file"
+            f"{'' if requirement.min_files == 1 else 's'}."
+        )
+
+    if requirement.max_files is not None and len(files) > requirement.max_files:
+        return f"{requirement.title} accepts at most {requirement.max_files} file(s)."
+
+    for filename in files:
+        suffix = Path(filename).suffix.lower()
+        if requirement.allowed_extensions and suffix not in requirement.allowed_extensions:
+            return (
+                f"{filename} has an unsupported file type. Expected one of: "
+                f"{', '.join(requirement.allowed_extensions)}."
+            )
+
+    normalized_names = {Path(filename).name.lower() for filename in files}
+    if framework_type == "transformers" and requirement.slot == "config":
+        if "config.json" not in normalized_names:
+            return "Runtime Config Assets must include config.json for transformer models."
+
+    return None
+
+
+def _planned_artifact_manifest(
+    framework_type: str,
+    artifact_files: dict[str, list[str]],
+) -> dict[str, object]:
+    requirements = ARTIFACT_REQUIREMENTS.get(framework_type)
+    if requirements is None:
+        raise RegistryValidationError(
+            f"Unsupported framework type '{framework_type}'.",
+            field_errors={"metadata.framework_type": "Unsupported model type."},
+        )
+
+    planned_names: set[str] = set()
+    artifact_manifest: dict[str, object] = {
+        "weights": [],
+        "tokenizer": [],
+        "config": [],
+        "vocabulary": [],
+        "label_map_file": None,
+        "label_classes_file": None,
+        "label_encoder_file": None,
+    }
+
+    for requirement in requirements:
+        slot_files = artifact_files.get(requirement.slot, [])
+        normalized_paths = []
+        for filename in slot_files:
+            unique_name = _unique_name(planned_names, Path(filename).name)
+            planned_names.add(unique_name)
+            normalized_paths.append(unique_name)
+        if requirement.max_files == 1:
+            artifact_manifest[requirement.slot] = normalized_paths[0] if normalized_paths else None
+        else:
+            artifact_manifest[requirement.slot] = normalized_paths
+
+    return artifact_manifest
+
+
 def _save_artifacts(
     model_dir: Path,
     framework_type: str,
@@ -651,39 +1277,40 @@ def _save_artifacts(
         grouped[slot].append(UploadedPayload(path=filename, content=upload.content))
 
     errors: list[str] = []
+    field_errors: dict[str, str] = {}
     artifact_manifest: dict[str, object] = {
         "weights": [],
         "tokenizer": [],
         "config": [],
         "vocabulary": [],
+        "label_map_file": None,
+        "label_classes_file": None,
+        "label_encoder_file": None,
     }
 
     for requirement in requirements:
         uploads = grouped.get(requirement.slot, [])
-        if requirement.required and len(uploads) < requirement.min_files:
-            errors.append(
-                f"'{requirement.slot}' requires at least {requirement.min_files} file(s). "
-                f"{requirement.description}"
-            )
-            continue
-        if requirement.max_files is not None and len(uploads) > requirement.max_files:
-            errors.append(
-                f"'{requirement.slot}' accepts at most {requirement.max_files} file(s)."
-            )
+        upload_names = [upload.path for upload in uploads]
+        requirement_error = _artifact_requirement_error(
+            framework_type,
+            requirement,
+            upload_names,
+        )
+        if requirement_error is not None:
+            errors.append(requirement_error)
+            field_errors[f"artifacts.{requirement.slot}"] = requirement_error
             continue
 
         stored_paths: list[str] = []
         for upload in uploads:
             extension = Path(upload.path).suffix.lower()
-            if (
-                requirement.allowed_extensions
-                and extension
-                and extension not in requirement.allowed_extensions
-            ):
-                errors.append(
-                    f"'{upload.path}' is not valid for '{requirement.slot}'. "
+            if requirement.allowed_extensions and extension not in requirement.allowed_extensions:
+                message = (
+                    f"{upload.path} is not valid for {requirement.title}. "
                     f"Expected one of: {', '.join(requirement.allowed_extensions)}."
                 )
+                errors.append(message)
+                field_errors[f"artifacts.{requirement.slot}"] = message
                 continue
             destination = _unique_file_path(model_dir, Path(upload.path).name)
             destination.write_bytes(upload.content)
@@ -695,7 +1322,10 @@ def _save_artifacts(
             artifact_manifest[requirement.slot] = stored_paths
 
     if errors:
-        raise ValueError(" ".join(errors))
+        raise RegistryValidationError(
+            " ".join(errors),
+            field_errors=field_errors,
+        )
 
     return artifact_manifest
 
@@ -826,6 +1456,17 @@ def _unique_file_path(root: Path, filename: str) -> Path:
     counter = 2
     while candidate.exists():
         candidate = root / f"{stem}-{counter}{suffix}"
+        counter += 1
+    return candidate
+
+
+def _unique_name(existing: set[str], filename: str) -> str:
+    candidate = filename
+    stem = Path(filename).stem
+    suffix = Path(filename).suffix
+    counter = 2
+    while candidate in existing:
+        candidate = f"{stem}-{counter}{suffix}"
         counter += 1
     return candidate
 
