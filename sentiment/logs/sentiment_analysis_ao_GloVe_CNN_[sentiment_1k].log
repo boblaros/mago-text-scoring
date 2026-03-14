@@ -1,19 +1,13 @@
-2026-03-08 17:44:38 | INFO     | Epoch   1/20 | tr_loss=1.9176 | va_loss=1.8810 | val_f1=0.1569 | 9.5s ✓  <-- new best
-2026-03-08 17:44:48 | INFO     | Epoch   2/20 | tr_loss=1.7699 | va_loss=1.7638 | val_f1=0.3064 | 8.8s ✓  <-- new best
-2026-03-08 17:44:57 | INFO     | Epoch   3/20 | tr_loss=1.5271 | va_loss=1.5202 | val_f1=0.4674 | 8.8s ✓  <-- new best
-2026-03-08 17:45:07 | INFO     | Epoch   4/20 | tr_loss=1.1271 | va_loss=1.1587 | val_f1=0.7382 | 8.9s ✓  <-- new best
-2026-03-08 17:45:16 | INFO     | Epoch   5/20 | tr_loss=0.6943 | va_loss=0.8175 | val_f1=0.8269 | 8.6s ✓  <-- new best
-2026-03-08 17:45:26 | INFO     | Epoch   6/20 | tr_loss=0.3426 | va_loss=0.5822 | val_f1=0.8615 | 8.8s ✓  <-- new best
-2026-03-08 17:45:35 | INFO     | Epoch   7/20 | tr_loss=0.1554 | va_loss=0.4648 | val_f1=0.8779 | 8.6s ✓  <-- new best
-2026-03-08 17:45:45 | INFO     | Epoch   8/20 | tr_loss=0.0668 | va_loss=0.4098 | val_f1=0.8870 | 8.8s ✓  <-- new best
-2026-03-08 17:45:54 | INFO     | Epoch   9/20 | tr_loss=0.0399 | va_loss=0.3893 | val_f1=0.8892 | 8.6s ✓  <-- new best
-2026-03-08 17:46:04 | INFO     | Epoch  10/20 | tr_loss=0.0267 | va_loss=0.3836 | val_f1=0.8900 | 8.8s ✓  <-- new best
-2026-03-08 17:46:13 | INFO     | Epoch  11/20 | tr_loss=0.0200 | va_loss=0.3858 | val_f1=0.8901 | 8.8s ✓  <-- new best
-2026-03-08 17:46:22 | INFO     | Epoch  12/20 | tr_loss=0.0170 | va_loss=0.3779 | val_f1=0.8900 | 8.8s
-2026-03-08 17:46:32 | INFO     | Epoch  13/20 | tr_loss=0.0138 | va_loss=0.3747 | val_f1=0.8915 | 8.8s ✓  <-- new best
-2026-03-08 17:46:41 | INFO     | Epoch  14/20 | tr_loss=0.0104 | va_loss=0.3767 | val_f1=0.8905 | 8.7s
-2026-03-08 17:46:50 | INFO     | Epoch  15/20 | tr_loss=0.0093 | va_loss=0.3785 | val_f1=0.8906 | 8.8s
-2026-03-08 17:46:59 | INFO     | Epoch  16/20 | tr_loss=0.0085 | va_loss=0.3797 | val_f1=0.8903 | 8.8s
-2026-03-08 17:46:59 | INFO     | Early stopping triggered at epoch 16.
-2026-03-08 17:46:59 | INFO     | Restored best checkpoint | val_f1=0.8915 | path=models\glove_cnn_sentiment_1k_20260308_174427\best_model\best.pt
-2026-03-08 17:46:59 | INFO     | Training complete.
+2026-03-13 13:44:25 | INFO     | Epoch   1/20 | tr_loss=0.8794 | va_loss=0.4095 | val_f1=0.8875 | 60.6s ✓  <-- new best
+2026-03-13 13:45:29 | INFO     | Epoch   2/20 | tr_loss=0.1964 | va_loss=0.2507 | val_f1=0.9337 | 63.6s ✓  <-- new best
+2026-03-13 13:46:37 | INFO     | Epoch   3/20 | tr_loss=0.0926 | va_loss=0.2218 | val_f1=0.9348 | 67.7s ✓  <-- new best
+2026-03-13 13:47:55 | INFO     | Epoch   4/20 | tr_loss=0.0591 | va_loss=0.2227 | val_f1=0.9361 | 77.3s ✓  <-- new best
+2026-03-13 13:49:21 | INFO     | Epoch   5/20 | tr_loss=0.0415 | va_loss=0.2092 | val_f1=0.9374 | 86.0s ✓  <-- new best
+2026-03-13 13:50:56 | INFO     | Epoch   6/20 | tr_loss=0.0320 | va_loss=0.2155 | val_f1=0.9378 | 93.9s ✓  <-- new best
+2026-03-13 13:52:37 | INFO     | Epoch   7/20 | tr_loss=0.0254 | va_loss=0.2123 | val_f1=0.9383 | 100.7s ✓  <-- new best
+2026-03-13 13:54:16 | INFO     | Epoch   8/20 | tr_loss=0.0220 | va_loss=0.2176 | val_f1=0.9359 | 98.6s
+2026-03-13 13:55:58 | INFO     | Epoch   9/20 | tr_loss=0.0133 | va_loss=0.2215 | val_f1=0.9370 | 102.0s
+2026-03-13 13:57:42 | INFO     | Epoch  10/20 | tr_loss=0.0131 | va_loss=0.2198 | val_f1=0.9374 | 104.2s
+2026-03-13 13:57:42 | INFO     | Early stopping triggered at epoch 10.
+2026-03-13 13:57:43 | INFO     | Restored best checkpoint | val_f1=0.9383 | path=models/glove_cnn_sentiment_1k_20260313_134324/best_model/best.pt
+2026-03-13 13:57:43 | INFO     | Training complete.

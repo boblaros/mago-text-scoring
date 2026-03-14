@@ -1,15 +1,15 @@
 {
   "val": {
-    "accuracy": 0.9754992319508449,
-    "f1_macro": 0.975430376084535,
-    "f1_weighted": 0.9754303760845349
+    "accuracy": 0.9730288805792028,
+    "f1_macro": 0.9737431771513808,
+    "f1_weighted": 0.9729537206975216
   },
   "test": {
-    "accuracy": 0.976036866359447,
-    "f1_macro": 0.9759652821941509,
-    "f1_weighted": 0.9759652821941509
+    "accuracy": 0.9747812251392204,
+    "f1_macro": 0.9754818673069197,
+    "f1_weighted": 0.9747182622380146
   },
-  "best_model_dir": "models\\distilbert_sentiment_60k_20260308_134122\\best_model",
-  "checkpoints_dir": "models\\distilbert_sentiment_60k_20260308_134122\\checkpoints",
-  "experiment_dir": "models\\distilbert_sentiment_60k_20260308_134122"
+  "best_model_dir": "models/distilbert_sentiment_60k_20260313_194030/best_model",
+  "checkpoints_dir": "models/distilbert_sentiment_60k_20260313_194030/checkpoints",
+  "experiment_dir": "models/distilbert_sentiment_60k_20260313_194030"
 }

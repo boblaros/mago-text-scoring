@@ -1,10 +1,10 @@
-2026-03-08 17:00:59 | INFO     | Epoch   1/20 | tr_loss=1.8316 | va_loss=1.5611 | val_f1=0.4752 | 12.0s ✓  <-- new best
-2026-03-08 17:01:12 | INFO     | Epoch   2/20 | tr_loss=1.0818 | va_loss=0.8129 | val_f1=0.8046 | 12.2s ✓  <-- new best
-2026-03-08 17:01:26 | INFO     | Epoch   3/20 | tr_loss=0.3678 | va_loss=0.5119 | val_f1=0.8512 | 12.5s ✓  <-- new best
-2026-03-08 17:01:38 | INFO     | Epoch   4/20 | tr_loss=0.1200 | va_loss=0.4629 | val_f1=0.8558 | 12.0s ✓  <-- new best
-2026-03-08 17:01:51 | INFO     | Epoch   5/20 | tr_loss=0.0533 | va_loss=0.4654 | val_f1=0.8522 | 11.9s
-2026-03-08 17:02:03 | INFO     | Epoch   6/20 | tr_loss=0.0280 | va_loss=0.4740 | val_f1=0.8506 | 11.9s
-2026-03-08 17:02:15 | INFO     | Epoch   7/20 | tr_loss=0.0172 | va_loss=0.4752 | val_f1=0.8507 | 11.9s
-2026-03-08 17:02:15 | INFO     | Early stopping triggered at epoch 7.
-2026-03-08 17:02:15 | INFO     | Restored best checkpoint | val_f1=0.8558 | path=models\glove_mlp_sentiment_5k_20260308_170046\best_model\best.pt
-2026-03-08 17:02:15 | INFO     | Training complete.
+2026-03-13 13:41:16 | INFO     | Epoch   1/20 | tr_loss=1.4569 | va_loss=1.0431 | val_f1=0.7361 | 1.6s ✓  <-- new best
+2026-03-13 13:41:18 | INFO     | Epoch   2/20 | tr_loss=0.5417 | va_loss=0.6407 | val_f1=0.8108 | 1.6s ✓  <-- new best
+2026-03-13 13:41:19 | INFO     | Epoch   3/20 | tr_loss=0.2081 | va_loss=0.5464 | val_f1=0.8291 | 1.7s ✓  <-- new best
+2026-03-13 13:41:21 | INFO     | Epoch   4/20 | tr_loss=0.0988 | va_loss=0.5199 | val_f1=0.8368 | 1.5s ✓  <-- new best
+2026-03-13 13:41:23 | INFO     | Epoch   5/20 | tr_loss=0.0488 | va_loss=0.5271 | val_f1=0.8357 | 1.5s
+2026-03-13 13:41:25 | INFO     | Epoch   6/20 | tr_loss=0.0275 | va_loss=0.5379 | val_f1=0.8348 | 1.5s
+2026-03-13 13:41:26 | INFO     | Epoch   7/20 | tr_loss=0.0177 | va_loss=0.5432 | val_f1=0.8357 | 1.6s
+2026-03-13 13:41:26 | INFO     | Early stopping triggered at epoch 7.
+2026-03-13 13:41:26 | INFO     | Restored best checkpoint | val_f1=0.8368 | path=models/glove_mlp_sentiment_5k_20260313_134114/best_model/best.pt
+2026-03-13 13:41:26 | INFO     | Training complete.
