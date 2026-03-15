@@ -3650,7 +3650,7 @@ textarea {
   top: 50%;
   left: calc(100% + 10px);
   z-index: 30;
-  width: min(220px, 26vw);
+  width: min(180px, 22vw);
   transform: translateY(-50%);
   padding: 8px 10px;
   border-radius: 12px;

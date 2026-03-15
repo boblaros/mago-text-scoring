@@ -1254,7 +1254,7 @@ export function ModelUploadWizard({
           htmlFor={fieldId("runtime-max-sequence-length")}
           className={`field-shell${fieldErrorFor(state, "runtime_max_sequence_length") ? " field-shell--error" : ""}`}
         >
-          {renderInfoLabel("Max sequence length", "Stored in the saved runtime block.")}
+          {renderInfoLabel("Max sequence length", "Used during tokenization to truncate or pad input")}
           <input
             id={fieldId("runtime-max-sequence-length")}
             type="number"
@@ -1277,7 +1277,7 @@ export function ModelUploadWizard({
           htmlFor={fieldId("runtime-batch-size")}
           className={`field-shell${fieldErrorFor(state, "runtime_batch_size") ? " field-shell--error" : ""}`}
         >
-          {renderInfoLabel("Batch size", "Visible because it materially changes runtime behavior.")}
+          {renderInfoLabel("Batch size", "Reserved for future functionality")}
           <input
             id={fieldId("runtime-batch-size")}
             type="number"
