@@ -456,7 +456,6 @@ async function validateLocalFilesStep(
   for (const requirement of requirements) {
     const files = state.artifactFiles[requirement.slot] ?? [];
     if (requirement.required && files.length === 0) {
-      errors[`artifacts.${requirement.slot}`] = `${requirement.title} is required.`;
       continue;
     }
 
@@ -711,7 +710,6 @@ export function ModelUploadWizard({
       dispatch({
         type: "set-errors",
         errors: localErrors,
-        message: "Resolve the highlighted file issues before validation can run.",
       });
       return;
     }
@@ -1502,15 +1500,6 @@ export function ModelUploadWizard({
       <div className="model-upload-sheet__content">
         <div className="model-upload-sheet__section">
           <div className="panel__eyebrow">Registration Config</div>
-          <div className="model-upload-sheet__section-header">
-            <div>
-              <p>
-                Upload a saved manifest if you already have one and we’ll validate and normalize
-                it. If you leave this empty, the system will generate the final saved manifest from
-                your answers and uploaded artifacts.
-              </p>
-            </div>
-          </div>
 
           <label
             htmlFor={fieldId("registration-config")}
@@ -1579,7 +1568,7 @@ export function ModelUploadWizard({
                       })
                     }
                   />
-                  <small>{fieldErrorFor(state, `artifacts.${requirement.slot}`) ?? "Selected files are validated before the import runs."}</small>
+                  <small>{fieldErrorFor(state, `artifacts.${requirement.slot}`)}</small>
                   <div className="artifact-slot__list">
                     {files.length > 0 ? (
                       files.map((file) => <span key={`${requirement.slot}-${file.name}`}>{file.name}</span>)
@@ -2045,7 +2034,7 @@ export function ModelUploadWizard({
             </button>
           </header>
 
-          {state.message && state.step !== "source" && state.step !== "details" ? (
+          {state.message && state.step !== "source" && state.step !== "details" && state.step !== "validate" ? (
             <div className="inline-alert">{state.message}</div>
           ) : null}
 
