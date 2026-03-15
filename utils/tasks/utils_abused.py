@@ -7,37 +7,37 @@ Original file is located at
     https://colab.research.google.com/drive/1diRqZ12JEdwbcbS5PMBqYU0mCnzBvxne
 """
 
-# Commented out IPython magic to ensure Python compatibility.
-# %%capture
-# !pip install emoji
-# !pip install contractions
-# !pip install langdetect
-# !pip install bertopic
-# import re
-# import string
-# import emoji
-# import contractions
-# import joblib
-# import numpy as np
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-# import pandas as pd
-# 
-# from langdetect import detect, LangDetectException
-# from sentence_transformers import SentenceTransformer
-# from umap import UMAP
-# from hdbscan import HDBSCAN
-# from sklearn.feature_extraction.text import CountVectorizer
-# from bertopic import BERTopic
-# from sklearn.metrics.pairwise import cosine_similarity
-# from wordcloud import WordCloud
-# from tqdm import tqdm
-# from sklearn.preprocessing import LabelEncoder
-# from collections import Counter
-# from nltk.corpus import stopwords
-# from imblearn.over_sampling import RandomOverSampler
-# 
-# print("everything OK")
+
+
+ !pip install emoji
+ !pip install contractions
+ !pip install langdetect
+ !pip install bertopic
+ import re
+ import string
+ import emoji
+ import contractions
+ import joblib
+ import numpy as np
+ import matplotlib.pyplot as plt
+ import seaborn as sns
+ import pandas as pd
+ 
+ from langdetect import detect, LangDetectException
+ from sentence_transformers import SentenceTransformer
+ from umap import UMAP
+ from hdbscan import HDBSCAN
+ from sklearn.feature_extraction.text import CountVectorizer
+ from bertopic import BERTopic
+ from sklearn.metrics.pairwise import cosine_similarity
+ from wordcloud import WordCloud
+ from tqdm import tqdm
+ from sklearn.preprocessing import LabelEncoder
+ from collections import Counter
+ from nltk.corpus import stopwords
+ from imblearn.over_sampling import RandomOverSampler
+
+ print("everything OK")
 
 # remove links , mentions and new line characters, emojis
 # # Clean hashtags at the end of the sentence, and keep those in the middle of the sentence by removing just the # symbol
