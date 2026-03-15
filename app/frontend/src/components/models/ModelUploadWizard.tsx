@@ -1504,7 +1504,6 @@ export function ModelUploadWizard({
           <div className="panel__eyebrow">Registration Config</div>
           <div className="model-upload-sheet__section-header">
             <div>
-              <h3>Optional existing registration config</h3>
               <p>
                 Upload a saved manifest if you already have one and we’ll validate and normalize
                 it. If you leave this empty, the system will generate the final saved manifest from
@@ -1544,7 +1543,7 @@ export function ModelUploadWizard({
             </div>
           </label>
 
-          <details className="model-upload-sheet__example-config" open>
+          <details className="model-upload-sheet__example-config">
             <summary>Example config</summary>
             <pre>{exampleConfigTemplate(currentFramework)}</pre>
           </details>
@@ -2038,10 +2037,7 @@ export function ModelUploadWizard({
           <header className="model-upload-sheet__header">
             <div>
               {state.step === "details" || state.step === "source" ? null : (
-                <>
-                  <div className="panel__eyebrow">Wizard</div>
-                  <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>
-                </>
+                <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>
               )}
             </div>
             <button type="button" className="mini-button" onClick={closeWizard} disabled={!canClose}>
