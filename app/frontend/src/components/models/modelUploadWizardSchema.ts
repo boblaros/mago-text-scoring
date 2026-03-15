@@ -149,6 +149,14 @@ export const DEFAULT_LABELS: UploadLabelClass[] = [
   { id: 0, name: "class_0", display_name: "Class 0" },
 ];
 
+export const TASK_OPTIONS = [
+  { value: "sequence-classification", label: "Sequence Classification" },
+  { value: "token-classification", label: "NER / Token Classification" },
+  { value: "translation", label: "Translation" },
+  { value: "text-generation", label: "Generation" },
+  { value: "knowledge-graph-construction", label: "Knowledge Graph Construction" },
+] as const;
+
 export function createDefaultMetadataDraft(): WizardMetadataDraft {
   return {
     model_id: "",

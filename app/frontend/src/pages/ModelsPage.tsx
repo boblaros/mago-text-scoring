@@ -96,6 +96,7 @@ export function ModelsPage() {
   const [busyModelId, setBusyModelId] = useState<string | null>(null);
   const [artifactIssueModelId, setArtifactIssueModelId] = useState<string | null>(null);
   const [modelInfoId, setModelInfoId] = useState<string | null>(null);
+  const [statusReasonModelId, setStatusReasonModelId] = useState<string | null>(null);
 
   const models = useMemo(
     () => managementDomains.flatMap((domain) => domain.models),
@@ -141,12 +142,43 @@ export function ModelsPage() {
   useEffect(() => {
     if (!models.length) {
       setSelectedModelId(null);
+      setStatusReasonModelId(null);
       return;
     }
     if (!selectedModelId || !models.some((model) => model.model_id === selectedModelId)) {
       setSelectedModelId(models[0].model_id);
     }
-  }, [models, selectedModelId]);
+    if (statusReasonModelId && !models.some((model) => model.model_id === statusReasonModelId)) {
+      setStatusReasonModelId(null);
+    }
+  }, [models, selectedModelId, statusReasonModelId]);
+
+  useEffect(() => {
+    if (!statusReasonModelId) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(".model-row__status-popover-anchor")) {
+        return;
+      }
+      setStatusReasonModelId(null);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setStatusReasonModelId(null);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [statusReasonModelId]);
 
   useEffect(() => {
     const activeModalModel = artifactIssueModel ?? modelInfo;
@@ -309,6 +341,8 @@ export function ModelsPage() {
     const isEditing = editingModelId === model.model_id;
     const reorderDisabled =
       !managementReady || busyModelId !== null || editingModelId !== null || isUploadOpen;
+    const showStatusReason =
+      statusReasonModelId === model.model_id && model.status === "incompatible" && Boolean(model.status_reason);
 
     return (
       <article
@@ -335,9 +369,36 @@ export function ModelsPage() {
               <span className={`status-chip status-chip--${model.is_active ? "available" : "missing"}`}>
                 {model.is_active ? "enabled" : "disabled"}
               </span>
-              <span className={`status-chip status-chip--${model.status}`}>
-                {humanizeStatus(model.status)}
-              </span>
+              {model.status === "incompatible" && model.status_reason ? (
+                <div className="model-row__status-popover-anchor">
+                  <button
+                    type="button"
+                    className={`status-chip status-chip-button status-chip--${model.status}`}
+                    aria-expanded={showStatusReason}
+                    aria-label={`Show incompatibility details for ${model.display_name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setStatusReasonModelId((current) => (current === model.model_id ? null : model.model_id));
+                    }}
+                  >
+                    {humanizeStatus(model.status)}
+                  </button>
+                  {showStatusReason ? (
+                    <div
+                      className="model-row__status-popover"
+                      role="dialog"
+                      aria-label={`${model.display_name} incompatibility details`}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {model.status_reason}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <span className={`status-chip status-chip--${model.status}`}>
+                  {humanizeStatus(model.status)}
+                </span>
+              )}
             </div>
 
             <div className="model-row__reorder-controls">
@@ -370,7 +431,7 @@ export function ModelsPage() {
             </div>
           </div>
         </div>
- 
+
         <div className="model-row__body">
           <div className="model-row__identity">
             <div className="model-row__headline">
@@ -427,8 +488,6 @@ export function ModelsPage() {
                 {model.missing_artifacts.length === 1 ? "" : "s"}
               </strong>
             </button>
-          ) : model.status_reason ? (
-            <div className="model-row__warning">{model.status_reason}</div>
           ) : null}
         </div>
 

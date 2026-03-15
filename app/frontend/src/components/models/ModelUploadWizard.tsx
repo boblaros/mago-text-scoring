@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useReducer, useRef } from "react";
+import { useEffect, useId, useMemo, useReducer, useRef, useState } from "react";
 import huggingFaceLogo from "../../assets/huggingface-logo.svg";
 import {
   ApiRequestError,
@@ -17,6 +17,7 @@ import type {
 } from "../../types/contracts";
 import {
   ARTIFACT_REQUIREMENTS,
+  TASK_OPTIONS,
   branchHeading,
   buildFileDescriptor,
   buildLocalPreflightPayload,
@@ -560,7 +561,34 @@ export function ModelUploadWizard({
   const currentFramework = state.metadata.framework_type;
   const validateControllerRef = useRef<AbortController | null>(null);
   const submitControllerRef = useRef<AbortController | null>(null);
+  const [optionalMetadataOpen, setOptionalMetadataOpen] = useState(false);
+  const [optionalRuntimeOpen, setOptionalRuntimeOpen] = useState(false);
   const fieldId = (suffix: string) => `${fieldIdPrefix}-${suffix}`;
+  const renderInfoLabel = (label: string, tooltip: string) => (
+    <span className="field-shell__label-row">
+      <span>{label}</span>
+      <span
+        className="field-info-badge"
+        tabIndex={0}
+        role="note"
+        aria-label={tooltip}
+        data-tooltip={tooltip}
+      >
+        i
+      </span>
+    </span>
+  );
+  const renderWarningBadge = (tooltip: string) => (
+    <span
+      className="field-warning-badge"
+      tabIndex={0}
+      role="note"
+      aria-label={tooltip}
+      data-tooltip={tooltip}
+    >
+      !
+    </span>
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -872,11 +900,11 @@ export function ModelUploadWizard({
             >
               {domains.map((domain) => (
                 <option key={domain.domain} value={domain.domain}>
-                  {domain.display_name} ({domain.domain})
+                  {domain.display_name}
                 </option>
               ))}
             </select>
-            <small>{fieldErrorFor(state, "domain") ?? "Reuse an existing domain and keep its display color/grouping."}</small>
+            {fieldErrorFor(state, "domain") ? <small>{fieldErrorFor(state, "domain")}</small> : null}
           </label>
         ) : (
           <div className="model-upload-sheet__grid">
@@ -942,12 +970,27 @@ export function ModelUploadWizard({
   const renderMetadataSection = () => (
     <div className="model-upload-sheet__section">
       <div className="panel__eyebrow">Model Metadata</div>
-      <div className="model-upload-sheet__grid">
+      <div className="model-upload-sheet__subsection">
+        <div className="model-upload-sheet__subsection-header">
+          <strong>Required</strong>
+        </div>
+        <div className="model-upload-sheet__grid">
         <label
           htmlFor={fieldId("display-name")}
-          className={`field-shell${fieldErrorFor(state, "display_name") ? " field-shell--error" : ""}`}
+          className={`field-shell field-shell--compact${fieldErrorFor(state, "display_name") ? " field-shell--error" : ""}`}
         >
-          <span>Display name</span>
+          <span className="field-shell__label-row">
+            <span>Display name</span>
+            <span
+              className="field-info-badge"
+              tabIndex={0}
+              role="note"
+              aria-label="The primary name shown in management and dashboards."
+              data-tooltip="The primary name shown in management and dashboards."
+            >
+              i
+            </span>
+          </span>
           <input
             id={fieldId("display-name")}
             aria-label="Display name"
@@ -957,15 +1000,26 @@ export function ModelUploadWizard({
             }
             placeholder="DistilBERT 60k"
           />
-          <small>{fieldErrorFor(state, "display_name") ?? "The primary name shown in management and dashboards."}</small>
+          {fieldErrorFor(state, "display_name") ? <small>{fieldErrorFor(state, "display_name")}</small> : null}
         </label>
 
         <label
           htmlFor={fieldId("model-id")}
-          className={`field-shell${fieldErrorFor(state, "model_id") ? " field-shell--error" : ""}`}
+          className={`field-shell field-shell--compact${fieldErrorFor(state, "model_id") ? " field-shell--error" : ""}`}
         >
-          <span>Model id</span>
-          <div className="model-upload-sheet__input-stack">
+          <span className="field-shell__label-row">
+            <span>Model id</span>
+            <span
+              className="field-info-badge"
+              tabIndex={0}
+              role="note"
+              aria-label="Unique registry id used for routes, manifests, and storage."
+              data-tooltip="Unique registry id used for routes, manifests, and storage."
+            >
+              i
+            </span>
+          </span>
+          <div className="model-upload-sheet__input-row">
             <input
               id={fieldId("model-id")}
               aria-label="Model id"
@@ -977,7 +1031,7 @@ export function ModelUploadWizard({
             />
             <button
               type="button"
-              className="mini-button"
+              className="mini-button model-upload-sheet__inline-action"
               onClick={() =>
                 dispatch({
                   type: "set-metadata",
@@ -992,33 +1046,7 @@ export function ModelUploadWizard({
               Suggest id
             </button>
           </div>
-          <small>{fieldErrorFor(state, "model_id") ?? "Unique registry id used for routes, manifests, and storage."}</small>
-        </label>
-
-        <label htmlFor={fieldId("description")} className="field-shell field-shell--wide">
-          <span>Description</span>
-          <textarea
-            id={fieldId("description")}
-            value={state.metadata.description ?? ""}
-            onChange={(event) =>
-              dispatch({ type: "set-metadata", key: "description", value: event.target.value })
-            }
-            placeholder="Short technical description"
-          />
-          <small>Optional context for reviewers and future maintainers.</small>
-        </label>
-
-        <label htmlFor={fieldId("version")} className="field-shell">
-          <span>Version</span>
-          <input
-            id={fieldId("version")}
-            value={state.metadata.version ?? ""}
-            onChange={(event) =>
-              dispatch({ type: "set-metadata", key: "version", value: event.target.value })
-            }
-            placeholder="v1"
-          />
-          <small>Optional release or export tag.</small>
+          {fieldErrorFor(state, "model_id") ? <small>{fieldErrorFor(state, "model_id")}</small> : null}
         </label>
 
         {branch !== "huggingface" ? (
@@ -1026,7 +1054,23 @@ export function ModelUploadWizard({
             htmlFor={fieldId("framework-type")}
             className={`field-shell${fieldErrorFor(state, "framework_type") ? " field-shell--error" : ""}`}
           >
-            <span>Model type</span>
+            <span className="field-shell__label-row">
+              <span>Model type</span>
+              <span
+                className="field-info-badge"
+                tabIndex={0}
+                role="note"
+                aria-label="This controls the artifact requirements and runtime mapping."
+                data-tooltip="This controls the artifact requirements and runtime mapping."
+              >
+                i
+              </span>
+              {state.metadata.framework_type !== "transformers"
+                ? renderWarningBadge(
+                    "You can upload this model, but it will not be runtime-compatible yet. Only transformer-based encoder models are currently supported for activation and live analysis.",
+                  )
+                : null}
+            </span>
             <select
               id={fieldId("framework-type")}
               value={state.metadata.framework_type}
@@ -1042,7 +1086,7 @@ export function ModelUploadWizard({
               <option value="pytorch">Deep Learning</option>
               <option value="sklearn">Classic ML</option>
             </select>
-            <small>{fieldErrorFor(state, "framework_type") ?? "This controls the artifact requirements and runtime mapping."}</small>
+            {fieldErrorFor(state, "framework_type") ? <small>{fieldErrorFor(state, "framework_type")}</small> : null}
           </label>
         ) : null}
 
@@ -1050,20 +1094,92 @@ export function ModelUploadWizard({
           htmlFor={fieldId("framework-task")}
           className={`field-shell${fieldErrorFor(state, "framework_task") ? " field-shell--error" : ""}`}
         >
-          <span>Framework task</span>
-          <input
+          <span className="field-shell__label-row">
+            <span>Task</span>
+            <span
+              className="field-info-badge"
+              tabIndex={0}
+              role="note"
+              aria-label="Visible and editable because it affects runtime compatibility."
+              data-tooltip="Visible and editable because it affects runtime compatibility."
+            >
+              i
+            </span>
+            {state.metadata.framework_task !== "sequence-classification"
+              ? renderWarningBadge(
+                  "This task selector is future-facing for now. Only Sequence Classification is currently runtime-supported.",
+                )
+              : null}
+          </span>
+          <select
             id={fieldId("framework-task")}
             value={state.metadata.framework_task}
             onChange={(event) =>
               dispatch({ type: "set-metadata", key: "framework_task", value: event.target.value })
             }
-            placeholder="sequence-classification"
+          >
+            {TASK_OPTIONS.map((task) => (
+              <option key={task.value} value={task.value}>
+                {task.label}
+              </option>
+            ))}
+          </select>
+          {fieldErrorFor(state, "framework_task") ? <small>{fieldErrorFor(state, "framework_task")}</small> : null}
+        </label>
+        </div>
+      </div>
+
+      <details
+        className="model-upload-sheet__subsection model-upload-sheet__subsection--collapsible"
+        open={optionalMetadataOpen}
+        onToggle={(event) => setOptionalMetadataOpen((event.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="model-upload-sheet__subsection-summary">
+          <span className="model-upload-sheet__subsection-header">
+            <strong>Optional</strong>
+          </span>
+          <span className="model-upload-sheet__subsection-chevron" aria-hidden="true" />
+        </summary>
+        <div className="model-upload-sheet__grid">
+        <label htmlFor={fieldId("description")} className="field-shell field-shell--wide">
+          <span className="field-shell__label-row">
+            <span>Description</span>
+            <span
+              className="field-info-badge"
+              tabIndex={0}
+              role="note"
+              aria-label="Optional context for reviewers and future maintainers."
+              data-tooltip="Optional context for reviewers and future maintainers."
+            >
+              i
+            </span>
+          </span>
+          <textarea
+            className="field-shell__textarea--compact"
+            id={fieldId("description")}
+            value={state.metadata.description ?? ""}
+            onChange={(event) =>
+              dispatch({ type: "set-metadata", key: "description", value: event.target.value })
+            }
+            placeholder="Short technical description"
           />
-          <small>{fieldErrorFor(state, "framework_task") ?? "Visible and editable because it affects runtime compatibility."}</small>
         </label>
 
+        <label htmlFor={fieldId("version")} className="field-shell">
+          {renderInfoLabel("Version", "Optional release or export tag.")}
+          <input
+            id={fieldId("version")}
+            value={state.metadata.version ?? ""}
+            onChange={(event) =>
+              dispatch({ type: "set-metadata", key: "version", value: event.target.value })
+            }
+            placeholder="v1"
+          />
+        </label>
+
+
         <label htmlFor={fieldId("framework-library")} className="field-shell">
-          <span>Framework library</span>
+          {renderInfoLabel("Framework library", "Defaults to the current runtime library for the selected model type.")}
           <input
             id={fieldId("framework-library")}
             value={state.metadata.framework_library ?? ""}
@@ -1072,11 +1188,10 @@ export function ModelUploadWizard({
             }
             placeholder={frameworkLibraryDefault(state.metadata.framework_type)}
           />
-          <small>Defaults to the current runtime library for the selected model type.</small>
         </label>
 
         <label htmlFor={fieldId("architecture")} className="field-shell">
-          <span>Architecture</span>
+          {renderInfoLabel("Architecture", "Important for runtime compatibility and review.")}
           <input
             id={fieldId("architecture")}
             value={state.metadata.architecture ?? ""}
@@ -1085,11 +1200,10 @@ export function ModelUploadWizard({
             }
             placeholder="DistilBertForSequenceClassification"
           />
-          <small>Important for runtime compatibility and review.</small>
         </label>
 
         <label htmlFor={fieldId("backbone")} className="field-shell">
-          <span>Backbone</span>
+          {renderInfoLabel("Backbone", "Used when the model family matters for review and import tracking.")}
           <input
             id={fieldId("backbone")}
             value={state.metadata.backbone ?? ""}
@@ -1098,11 +1212,10 @@ export function ModelUploadWizard({
             }
             placeholder="distilbert-base-uncased"
           />
-          <small>Used when the model family matters for review and import tracking.</small>
         </label>
 
         <label htmlFor={fieldId("base-model")} className="field-shell">
-          <span>Base model</span>
+          {renderInfoLabel("Base model", "Optional but helpful when the export and the training backbone differ.")}
           <input
             id={fieldId("base-model")}
             value={state.metadata.base_model ?? ""}
@@ -1111,11 +1224,10 @@ export function ModelUploadWizard({
             }
             placeholder="bert-base-uncased"
           />
-          <small>Optional but helpful when the export and the training backbone differ.</small>
         </label>
 
         <label htmlFor={fieldId("embeddings")} className="field-shell">
-          <span>Embeddings</span>
+          {renderInfoLabel("Embeddings", "Mostly relevant for custom deep learning and classic ML flows.")}
           <input
             id={fieldId("embeddings")}
             value={state.metadata.embeddings ?? ""}
@@ -1124,21 +1236,25 @@ export function ModelUploadWizard({
             }
             placeholder="fasttext-wiki-news-subwords-300"
           />
-          <small>Mostly relevant for custom deep learning and classic ML flows.</small>
         </label>
-      </div>
+        </div>
+      </details>
     </div>
   );
 
   const renderRuntimeSection = () => (
     <div className="model-upload-sheet__section">
       <div className="panel__eyebrow">Runtime & Labels</div>
-      <div className="model-upload-sheet__grid">
+      <div className="model-upload-sheet__subsection">
+        <div className="model-upload-sheet__subsection-header">
+          <strong>Required</strong>
+        </div>
+        <div className="model-upload-sheet__grid">
         <label
           htmlFor={fieldId("runtime-max-sequence-length")}
           className={`field-shell${fieldErrorFor(state, "runtime_max_sequence_length") ? " field-shell--error" : ""}`}
         >
-          <span>Max sequence length</span>
+          {renderInfoLabel("Max sequence length", "Stored in the saved runtime block.")}
           <input
             id={fieldId("runtime-max-sequence-length")}
             type="number"
@@ -1152,14 +1268,16 @@ export function ModelUploadWizard({
               })
             }
           />
-          <small>{fieldErrorFor(state, "runtime_max_sequence_length") ?? "Stored in the saved runtime block."}</small>
+          {fieldErrorFor(state, "runtime_max_sequence_length") ? (
+            <small>{fieldErrorFor(state, "runtime_max_sequence_length")}</small>
+          ) : null}
         </label>
 
         <label
           htmlFor={fieldId("runtime-batch-size")}
           className={`field-shell${fieldErrorFor(state, "runtime_batch_size") ? " field-shell--error" : ""}`}
         >
-          <span>Batch size</span>
+          {renderInfoLabel("Batch size", "Visible because it materially changes runtime behavior.")}
           <input
             id={fieldId("runtime-batch-size")}
             type="number"
@@ -1173,113 +1291,14 @@ export function ModelUploadWizard({
               })
             }
           />
-          <small>{fieldErrorFor(state, "runtime_batch_size") ?? "Visible because it materially changes runtime behavior."}</small>
-        </label>
-
-        <label htmlFor={fieldId("runtime-device")} className="field-shell">
-          <span>Runtime device</span>
-          <select
-            id={fieldId("runtime-device")}
-            value={state.metadata.runtime_device}
-            onChange={(event) =>
-              dispatch({ type: "set-metadata", key: "runtime_device", value: event.target.value })
-            }
-          >
-            <option value="auto">Auto</option>
-            <option value="cpu">CPU</option>
-            <option value="cuda">CUDA</option>
-            <option value="mps">MPS</option>
-          </select>
-          <small>Matches the existing manifest structure used in the registry.</small>
-        </label>
-
-        <label htmlFor={fieldId("runtime-padding")} className="field-shell">
-          <span>Padding</span>
-          <select
-            id={fieldId("runtime-padding")}
-            value={state.metadata.runtime_padding_mode}
-            onChange={(event) =>
-              dispatch({
-                type: "set-metadata",
-                key: "runtime_padding_mode",
-                value: event.target.value as WizardMetadataDraft["runtime_padding_mode"],
-              })
-            }
-          >
-            <option value="true">true</option>
-            <option value="false">false</option>
-            <option value="max_length">max_length</option>
-          </select>
-          <small>The saved manifest keeps this exact runtime padding mode.</small>
-        </label>
-
-        <label className="toggle-field field-shell">
-          <input
-            type="checkbox"
-            checked={state.metadata.runtime_truncation}
-            onChange={(event) =>
-              dispatch({
-                type: "set-metadata",
-                key: "runtime_truncation",
-                value: event.target.checked,
-              })
-            }
-          />
-          <span>Enable truncation</span>
-          <small>Stored in the runtime block and shown in review.</small>
-        </label>
-
-        <label className="toggle-field field-shell">
-          <input
-            type="checkbox"
-            checked={state.metadata.enable_on_upload}
-            onChange={(event) =>
-              dispatch({
-                type: "set-metadata",
-                key: "enable_on_upload",
-                value: event.target.checked,
-              })
-            }
-          />
-          <span>Enable immediately after registration</span>
-          <small>Activation is still blocked if runtime compatibility checks fail.</small>
-        </label>
-
-        <label htmlFor={fieldId("runtime-preprocessing")} className="field-shell field-shell--wide">
-          <span>Preprocessing</span>
-          <input
-            id={fieldId("runtime-preprocessing")}
-            value={state.metadata.runtime_preprocessing ?? ""}
-            onChange={(event) =>
-              dispatch({
-                type: "set-metadata",
-                key: "runtime_preprocessing",
-                value: event.target.value,
-              })
-            }
-            placeholder="normalize_text + texts_to_sequences"
-          />
-          <small>Especially useful for custom PyTorch and classic ML registrations.</small>
-        </label>
-
-        <label
-          htmlFor={fieldId("model-config-text")}
-          className={`field-shell field-shell--wide${fieldErrorFor(state, "model_config_text") ? " field-shell--error" : ""}`}
-        >
-          <span>Model config payload (JSON)</span>
-          <textarea
-            id={fieldId("model-config-text")}
-            value={state.metadata.model_config_text}
-            onChange={(event) =>
-              dispatch({ type: "set-metadata", key: "model_config_text", value: event.target.value })
-            }
-            placeholder='{"hidden_dim": 128, "num_layers": 2}'
-          />
-          <small>{fieldErrorFor(state, "model_config_text") ?? "This is stored under the `model` block in the saved manifest."}</small>
+          {fieldErrorFor(state, "runtime_batch_size") ? <small>{fieldErrorFor(state, "runtime_batch_size")}</small> : null}
         </label>
 
         <div className={`field-shell field-shell--wide${fieldErrorFor(state, "labels") ? " field-shell--error" : ""}`}>
-          <span>Labels</span>
+          {renderInfoLabel(
+            "Labels",
+            "HF preflight can replace the placeholder labels when remote metadata exposes a label map.",
+          )}
           <div className="label-editor">
             {state.metadata.labels.map((label, index) => (
               <div key={`${label.id}-${index}`} className="label-editor__row">
@@ -1315,17 +1334,6 @@ export function ModelUploadWizard({
                     <small className="field-error">{fieldErrorFor(state, `label-name-${index}`)}</small>
                   ) : null}
                 </div>
-                <input
-                  value={label.display_name ?? ""}
-                  onChange={(event) =>
-                    dispatch({
-                      type: "update-label",
-                      index,
-                      patch: { display_name: event.target.value },
-                    })
-                  }
-                  placeholder="Display label"
-                />
                 <button
                   type="button"
                   className="mini-button"
@@ -1341,25 +1349,147 @@ export function ModelUploadWizard({
             <button type="button" className="mini-button" onClick={() => dispatch({ type: "add-label" })}>
               Add label
             </button>
-            <span>{fieldErrorFor(state, "labels") ?? "HF preflight can replace the placeholder labels when remote metadata exposes a label map."}</span>
+            {fieldErrorFor(state, "labels") ? <span>{fieldErrorFor(state, "labels")}</span> : null}
           </div>
         </div>
+        </div>
       </div>
+
+      <details
+        className="model-upload-sheet__subsection model-upload-sheet__subsection--collapsible"
+        open={optionalRuntimeOpen}
+        onToggle={(event) => setOptionalRuntimeOpen((event.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="model-upload-sheet__subsection-summary">
+          <span className="model-upload-sheet__subsection-header">
+            <strong>Optional</strong>
+          </span>
+          <span className="model-upload-sheet__subsection-chevron" aria-hidden="true" />
+        </summary>
+        <div className="model-upload-sheet__grid">
+
+        <label htmlFor={fieldId("runtime-device")} className="field-shell">
+          {renderInfoLabel("Runtime device", "Matches the existing manifest structure used in the registry.")}
+          <select
+            id={fieldId("runtime-device")}
+            value={state.metadata.runtime_device}
+            onChange={(event) =>
+              dispatch({ type: "set-metadata", key: "runtime_device", value: event.target.value })
+            }
+          >
+            <option value="auto">Auto</option>
+            <option value="cpu">CPU</option>
+            <option value="cuda">CUDA</option>
+            <option value="mps">MPS</option>
+          </select>
+        </label>
+
+        <label htmlFor={fieldId("runtime-padding")} className="field-shell">
+          {renderInfoLabel("Padding", "The saved manifest keeps this exact runtime padding mode.")}
+          <select
+            id={fieldId("runtime-padding")}
+            value={state.metadata.runtime_padding_mode}
+            onChange={(event) =>
+              dispatch({
+                type: "set-metadata",
+                key: "runtime_padding_mode",
+                value: event.target.value as WizardMetadataDraft["runtime_padding_mode"],
+              })
+            }
+          >
+            <option value="true">true</option>
+            <option value="false">false</option>
+            <option value="max_length">max_length</option>
+          </select>
+        </label>
+
+        <label htmlFor={fieldId("runtime-truncation")} className="toggle-field field-shell">
+          <div className="toggle-field__copy">
+            {renderInfoLabel("Enable truncation", "Stored in the runtime block and shown in review.")}
+          </div>
+          <div className="toggle-field__control">
+            <input
+              id={fieldId("runtime-truncation")}
+              className="toggle-field__input"
+              type="checkbox"
+              checked={state.metadata.runtime_truncation}
+              onChange={(event) =>
+                dispatch({
+                  type: "set-metadata",
+                  key: "runtime_truncation",
+                  value: event.target.checked,
+                })
+              }
+            />
+            <span className="toggle-field__switch" aria-hidden="true" />
+            <span className="toggle-field__state">{state.metadata.runtime_truncation ? "On" : "Off"}</span>
+          </div>
+        </label>
+
+        <label htmlFor={fieldId("enable-on-upload")} className="toggle-field field-shell">
+          <div className="toggle-field__copy">
+            {renderInfoLabel(
+              "Enable after registration",
+              "Activation is still blocked if runtime compatibility checks fail.",
+            )}
+          </div>
+          <div className="toggle-field__control">
+            <input
+              id={fieldId("enable-on-upload")}
+              className="toggle-field__input"
+              type="checkbox"
+              checked={state.metadata.enable_on_upload}
+              onChange={(event) =>
+                dispatch({
+                  type: "set-metadata",
+                  key: "enable_on_upload",
+                  value: event.target.checked,
+                })
+              }
+            />
+            <span className="toggle-field__switch" aria-hidden="true" />
+            <span className="toggle-field__state">{state.metadata.enable_on_upload ? "On" : "Off"}</span>
+          </div>
+        </label>
+
+        <label htmlFor={fieldId("runtime-preprocessing")} className="field-shell field-shell--wide">
+          {renderInfoLabel("Preprocessing", "Especially useful for custom PyTorch and classic ML registrations.")}
+          <input
+            id={fieldId("runtime-preprocessing")}
+            value={state.metadata.runtime_preprocessing ?? ""}
+            onChange={(event) =>
+              dispatch({
+                type: "set-metadata",
+                key: "runtime_preprocessing",
+                value: event.target.value,
+              })
+            }
+            placeholder="normalize_text + texts_to_sequences"
+          />
+        </label>
+
+        <label
+          htmlFor={fieldId("model-config-text")}
+          className={`field-shell field-shell--wide${fieldErrorFor(state, "model_config_text") ? " field-shell--error" : ""}`}
+        >
+          {renderInfoLabel("Model config payload (JSON)", "This is stored under the `model` block in the saved manifest.")}
+          <textarea
+            id={fieldId("model-config-text")}
+            value={state.metadata.model_config_text}
+            onChange={(event) =>
+              dispatch({ type: "set-metadata", key: "model_config_text", value: event.target.value })
+            }
+            placeholder='{"hidden_dim": 128, "num_layers": 2}'
+          />
+          {fieldErrorFor(state, "model_config_text") ? <small>{fieldErrorFor(state, "model_config_text")}</small> : null}
+        </label>
+        </div>
+      </details>
     </div>
   );
 
   const renderDetailsStep = () => (
     <div className="model-upload-sheet__content">
-      <div className="model-upload-sheet__intro-card">
-        <div className="panel__eyebrow">Step 2</div>
-        <h3>{branchHeading(branch)}</h3>
-        <p>
-          {branch === "local"
-            ? "Set the local registry metadata you want first. On the next step you can optionally upload an existing registration config, or let the system generate the final saved manifest from your answers and artifacts."
-            : "Set the registry metadata you want before we inspect the remote repo and generate the final manifest."}
-        </p>
-      </div>
-
       {renderDomainSection()}
       {renderMetadataSection()}
       {renderRuntimeSection()}
@@ -1907,15 +2037,21 @@ export function ModelUploadWizard({
         <div className="model-upload-sheet__main">
           <header className="model-upload-sheet__header">
             <div>
-              <div className="panel__eyebrow">Wizard</div>
-              {state.step === "source" ? null : <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>}
+              {state.step === "details" || state.step === "source" ? null : (
+                <>
+                  <div className="panel__eyebrow">Wizard</div>
+                  <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>
+                </>
+              )}
             </div>
             <button type="button" className="mini-button" onClick={closeWizard} disabled={!canClose}>
               Close
             </button>
           </header>
 
-          {state.message ? <div className="inline-alert">{state.message}</div> : null}
+          {state.message && state.step !== "source" && state.step !== "details" ? (
+            <div className="inline-alert">{state.message}</div>
+          ) : null}
 
           {renderBody()}
 
