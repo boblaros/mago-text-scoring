@@ -14,11 +14,7 @@ export type WizardStep =
   | "result";
 
 export type UploadSource = "local" | "huggingface";
-export type LocalConfigAnswer = "uploaded" | "generated";
-export type BranchMode =
-  | "local-config-upload"
-  | "local-generated-config"
-  | "huggingface";
+export type BranchMode = "local" | "huggingface";
 export type FrameworkType = UploadModelMetadata["framework_type"];
 
 export interface ArtifactRequirement {
@@ -186,16 +182,12 @@ export function createDefaultMetadataDraft(): WizardMetadataDraft {
 
 export function resolveBranchMode(
   source: UploadSource | null,
-  localConfigAnswer: LocalConfigAnswer | null,
 ): BranchMode | null {
   if (source === "huggingface") {
     return "huggingface";
   }
-  if (source === "local" && localConfigAnswer === "uploaded") {
-    return "local-config-upload";
-  }
-  if (source === "local" && localConfigAnswer === "generated") {
-    return "local-generated-config";
+  if (source === "local") {
+    return "local";
   }
   return null;
 }
@@ -341,12 +333,10 @@ export function fromUploadMetadata(metadata: UploadModelMetadata): WizardMetadat
 export function buildLocalPreflightPayload(
   draft: WizardMetadataDraft,
   domain: DomainChoice,
-  registrationMode: LocalConfigAnswer,
   artifactFiles: Record<string, File[]>,
   dashboardFiles: File[],
 ): LocalUploadPreflightRequest {
   return {
-    registration_mode: registrationMode,
     metadata: toUploadMetadata(draft, domain),
     artifact_manifest: Object.fromEntries(
       Object.entries(artifactFiles)
@@ -401,11 +391,8 @@ export function summarizeDashboardReference(fileRef: string) {
 }
 
 export function branchHeading(branch: BranchMode | null): string {
-  if (branch === "local-config-upload") {
-    return "Local upload with existing config";
-  }
-  if (branch === "local-generated-config") {
-    return "Local upload with generated config";
+  if (branch === "local") {
+    return "Local upload";
   }
   if (branch === "huggingface") {
     return "Import from Hugging Face";

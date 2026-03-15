@@ -211,7 +211,6 @@ class UploadFileDescriptor(BaseModel):
 
 
 class LocalUploadPreflightRequest(BaseModel):
-    registration_mode: Literal["uploaded", "generated"]
     metadata: UploadModelMetadata
     artifact_manifest: dict[str, list[UploadFileDescriptor]] = Field(default_factory=dict)
     dashboard_manifest: list[UploadFileDescriptor] = Field(default_factory=list)
@@ -276,7 +275,7 @@ class HuggingFacePreflightResponse(BaseModel):
 class ModelRegistrationResult(BaseModel):
     model_id: str
     source: Literal["local", "huggingface"]
-    branch: Literal["local-config-upload", "local-generated-config", "huggingface"]
+    branch: Literal["local", "huggingface"]
     config_source: Literal["uploaded", "generated"]
     framework_type: str
     display_name: str

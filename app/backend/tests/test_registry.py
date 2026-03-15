@@ -120,7 +120,6 @@ def _build_metadata(**overrides) -> UploadModelMetadata:
 
 def _build_local_payload(
     *,
-    registration_mode: str = "generated",
     metadata: UploadModelMetadata | None = None,
     framework_type: str = "transformers",
     artifact_manifest: dict[str, list[UploadFileDescriptor]] | None = None,
@@ -135,7 +134,6 @@ def _build_local_payload(
         "config": [UploadFileDescriptor(name="config.json", size_bytes=9)],
     }
     return LocalUploadPreflightRequest(
-        registration_mode=registration_mode,
         metadata=effective_metadata,
         artifact_manifest=manifest,
     )
@@ -470,7 +468,7 @@ labels:
 
 def test_local_uploaded_config_happy_path(tmp_path: Path) -> None:
     registry = _build_registry(tmp_path)
-    payload = _build_local_payload(registration_mode="uploaded")
+    payload = _build_local_payload()
     config_upload = _uploaded_registration_config()
 
     preflight = registry.preflight_local_upload(
@@ -488,7 +486,7 @@ def test_local_uploaded_config_happy_path(tmp_path: Path) -> None:
         registration_config_uploads=[config_upload],
     )
 
-    assert outcome.result.branch == "local-config-upload"
+    assert outcome.result.branch == "local"
     assert outcome.result.config_source == "uploaded"
     manifest_path = tmp_path / "prod-model-sentiment" / "model-config.yaml"
     manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
@@ -499,7 +497,7 @@ def test_local_uploaded_config_happy_path(tmp_path: Path) -> None:
 
 def test_local_uploaded_config_missing_required_file_raises_field_error(tmp_path: Path) -> None:
     registry = _build_registry(tmp_path)
-    payload = _build_local_payload(registration_mode="uploaded")
+    payload = _build_local_payload()
 
     with pytest.raises(RegistryValidationError) as exc_info:
         registry.register_local_upload(
@@ -514,7 +512,7 @@ def test_local_uploaded_config_missing_required_file_raises_field_error(tmp_path
 
 def test_local_uploaded_config_invalid_manifest_is_rejected(tmp_path: Path) -> None:
     registry = _build_registry(tmp_path)
-    payload = _build_local_payload(registration_mode="uploaded")
+    payload = _build_local_payload()
 
     with pytest.raises(RegistryValidationError) as exc_info:
         registry.preflight_local_upload(
@@ -530,7 +528,6 @@ def test_local_uploaded_config_invalid_manifest_is_rejected(tmp_path: Path) -> N
 def test_local_generated_config_happy_path(tmp_path: Path) -> None:
     registry = _build_registry(tmp_path)
     payload = _build_local_payload(
-        registration_mode="generated",
         metadata=_build_metadata(
             model_id="complexity-demo",
             domain="complexity",
@@ -564,7 +561,7 @@ def test_local_generated_config_happy_path(tmp_path: Path) -> None:
         registration_config_uploads=[],
     )
 
-    assert outcome.result.branch == "local-generated-config"
+    assert outcome.result.branch == "local"
     manifest = yaml.safe_load(
         (tmp_path / "prod-model-complexity" / "model-config.yaml").read_text(encoding="utf-8")
     )
@@ -575,7 +572,6 @@ def test_local_generated_config_happy_path(tmp_path: Path) -> None:
 def test_transformer_preflight_requires_config_json(tmp_path: Path) -> None:
     registry = _build_registry(tmp_path)
     payload = _build_local_payload(
-        registration_mode="generated",
         artifact_manifest={
             "weights": [UploadFileDescriptor(name="model.safetensors", size_bytes=42)],
             "tokenizer": [
@@ -598,7 +594,6 @@ def test_transformer_preflight_requires_config_json(tmp_path: Path) -> None:
 def test_transformer_import_requires_config_json(tmp_path: Path) -> None:
     registry = _build_registry(tmp_path)
     payload = _build_local_payload(
-        registration_mode="generated",
         artifact_manifest={
             "weights": [UploadFileDescriptor(name="model.safetensors", size_bytes=42)],
             "tokenizer": [
@@ -641,7 +636,7 @@ def test_local_generated_config_duplicate_model_id_is_rejected(tmp_path: Path) -
 
     with pytest.raises(RegistryValidationError) as exc_info:
         registry.preflight_local_upload(
-            _build_local_payload(registration_mode="generated"),
+            _build_local_payload(),
             registration_config_uploads=[],
         )
 

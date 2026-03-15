@@ -209,7 +209,6 @@ export interface ArtifactValidationSummary {
 }
 
 export interface LocalUploadPreflightRequest {
-  registration_mode: "uploaded" | "generated";
   metadata: UploadModelMetadata;
   artifact_manifest: Record<string, UploadFileDescriptor[]>;
   dashboard_manifest: UploadFileDescriptor[];
@@ -265,7 +264,7 @@ export interface HuggingFacePreflightResponse {
 export interface ModelRegistrationResult {
   model_id: string;
   source: "local" | "huggingface";
-  branch: "local-config-upload" | "local-generated-config" | "huggingface";
+  branch: "local" | "huggingface";
   config_source: "uploaded" | "generated";
   framework_type: string;
   display_name: string;

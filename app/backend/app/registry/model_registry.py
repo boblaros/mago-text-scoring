@@ -369,11 +369,14 @@ class ModelRegistry:
         *,
         registration_config_uploads: list[UploadedPayload],
     ) -> LocalUploadPreflightResponse:
+        registration_mode = self._resolve_local_registration_mode(
+            registration_config_uploads
+        )
         metadata = self._normalize_metadata(payload.metadata)
         self._ensure_model_id_available(metadata.model_id)
 
         warnings: list[str] = []
-        if payload.registration_mode == "uploaded":
+        if registration_mode == "uploaded":
             registration_manifest, registration_warnings = self._load_uploaded_registration_manifest(
                 metadata,
                 registration_config_uploads,
@@ -409,7 +412,7 @@ class ModelRegistry:
         )
         return LocalUploadPreflightResponse(
             ready=True,
-            config_source=payload.registration_mode,
+            config_source=registration_mode,
             normalized_metadata=metadata,
             config_preview=self._build_manifest_preview(manifest),
             artifact_checks=artifact_checks,
@@ -425,11 +428,14 @@ class ModelRegistry:
         dashboard_uploads: list[UploadedPayload],
         registration_config_uploads: list[UploadedPayload],
     ) -> RegistrationOutcome:
+        registration_mode = self._resolve_local_registration_mode(
+            registration_config_uploads
+        )
         metadata = self._normalize_metadata(payload.metadata)
         self._ensure_model_id_available(metadata.model_id)
 
         warnings: list[str] = []
-        if payload.registration_mode == "uploaded":
+        if registration_mode == "uploaded":
             registration_manifest, registration_warnings = self._load_uploaded_registration_manifest(
                 metadata,
                 registration_config_uploads,
@@ -489,12 +495,8 @@ class ModelRegistry:
             result=self._build_registration_result(
                 metadata.model_id,
                 source="local",
-                branch=(
-                    "local-config-upload"
-                    if payload.registration_mode == "uploaded"
-                    else "local-generated-config"
-                ),
-                config_source=payload.registration_mode,
+                branch="local",
+                config_source=registration_mode,
                 warnings=list(dict.fromkeys(warnings)),
             ),
         )
@@ -726,6 +728,12 @@ class ModelRegistry:
             dashboard_status=str(serialized["dashboard_status"]),
             warnings=warnings,
         )
+
+    def _resolve_local_registration_mode(
+        self,
+        registration_config_uploads: list[UploadedPayload],
+    ) -> str:
+        return "uploaded" if registration_config_uploads else "generated"
 
     def _metadata_from_hf_request(
         self,

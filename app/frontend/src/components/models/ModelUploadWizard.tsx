@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useReducer, useRef } from "react";
+import huggingFaceLogo from "../../assets/huggingface-logo.svg";
 import {
   ApiRequestError,
   importHuggingFaceModel,
@@ -36,7 +37,6 @@ import {
   type BranchMode,
   type DomainChoice,
   type FrameworkType,
-  type LocalConfigAnswer,
   type UploadSource,
   type WizardMetadataDraft,
   type WizardStep,
@@ -47,7 +47,6 @@ type PreflightResult = LocalUploadPreflightResponse | HuggingFacePreflightRespon
 interface WizardState {
   step: WizardStep;
   source: UploadSource | null;
-  localConfigAnswer: LocalConfigAnswer | null;
   metadata: WizardMetadataDraft;
   domainMode: "existing" | "new";
   existingDomain: string;
@@ -69,7 +68,6 @@ type WizardAction =
   | { type: "reset"; existingDomain: string }
   | { type: "set-step"; step: WizardStep }
   | { type: "set-source"; source: UploadSource }
-  | { type: "set-local-config-answer"; answer: LocalConfigAnswer }
   | { type: "set-domain-mode"; mode: "existing" | "new" }
   | { type: "set-existing-domain"; domain: string }
   | { type: "set-new-domain"; key: "display_name" | "color_token" | "group"; value: string }
@@ -99,11 +97,27 @@ const STEP_DEFS: Array<{ id: WizardStep; label: string }> = [
   { id: "result", label: "Result" },
 ];
 
+function LocalSourceIcon() {
+  return (
+    <svg
+      viewBox="0 0 48 48"
+      className="model-upload-sheet__choice-icon"
+      aria-hidden="true"
+    >
+      <rect x="9" y="8" width="30" height="20" rx="5" />
+      <path d="M17 36h14" />
+      <path d="M22 28v8" />
+      <path d="M18 16h12" />
+      <path d="M12 20h24" />
+      <path d="M12 33.5h10.5l3-5.5h10.5" />
+    </svg>
+  );
+}
+
 function createInitialState(existingDomain: string): WizardState {
   return {
     step: "source",
     source: null,
-    localConfigAnswer: null,
     metadata: createDefaultMetadataDraft(),
     domainMode: "existing",
     existingDomain,
@@ -147,13 +161,7 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return {
         ...clearExecutionState(state),
         source: action.source,
-        localConfigAnswer: action.source === "local" ? state.localConfigAnswer : null,
         step: "source",
-      };
-    case "set-local-config-answer":
-      return {
-        ...clearExecutionState(state),
-        localConfigAnswer: action.answer,
       };
     case "set-domain-mode":
       return {
@@ -461,12 +469,6 @@ async function validateLocalFilesStep(
     }
   }
 
-  if (resolveBranchMode(state.source, state.localConfigAnswer) === "local-config-upload") {
-    if (state.registrationConfigFiles.length === 0) {
-      errors.registration_config = "Upload the existing registration config file.";
-    }
-  }
-
   if (state.dashboardFiles.length > 0) {
     const manifestFile = state.dashboardFiles.find((file) =>
       normalizeDashboardRelativePath(file).endsWith("dashboard-manifest.json"),
@@ -552,7 +554,7 @@ export function ModelUploadWizard({
   );
   const fieldIdPrefix = useId();
   const stepOrder = useMemo(() => STEP_DEFS.map((step) => step.id), []);
-  const branch = resolveBranchMode(state.source, state.localConfigAnswer);
+  const branch = resolveBranchMode(state.source);
   const domainChoice = resolveDomainChoice(state, domains);
   const currentMetadata = useMemo(() => getCurrentMetadata(state, domains), [state, domains]);
   const currentFramework = state.metadata.framework_type;
@@ -601,14 +603,11 @@ export function ModelUploadWizard({
     if (!state.source) {
       errors.source = "Choose where the model is coming from.";
     }
-    if (state.source === "local" && !state.localConfigAnswer) {
-      errors.local_config = "Tell the wizard whether you already have registration config files.";
-    }
     if (Object.keys(errors).length > 0) {
       dispatch({
         type: "set-errors",
         errors,
-        message: "Choose an upload branch to continue.",
+        message: "Choose an upload source to continue.",
       });
       return;
     }
@@ -700,7 +699,6 @@ export function ModelUploadWizard({
         buildLocalPreflightPayload(
           state.metadata,
           domainChoice,
-          state.localConfigAnswer ?? "generated",
           state.artifactFiles,
           state.dashboardFiles,
         ),
@@ -758,7 +756,6 @@ export function ModelUploadWizard({
             buildLocalPreflightPayload(
               state.metadata,
               domainChoice!,
-              state.localConfigAnswer ?? "generated",
               state.artifactFiles,
               state.dashboardFiles,
             ),
@@ -790,60 +787,51 @@ export function ModelUploadWizard({
   };
 
   const renderSourceStep = () => (
-    <div className="model-upload-sheet__content">
-      <div className="model-upload-sheet__section">
-        <div className="panel__eyebrow">Step 1</div>
-        <h3>Where is the model coming from?</h3>
-        <div className="model-upload-sheet__choice-grid">
+    <div className="model-upload-sheet__content model-upload-sheet__content--source">
+      <div className="model-upload-sheet__section model-upload-sheet__section--source">
+        <h3 className="model-upload-sheet__source-question">Where is the model coming from?</h3>
+        <div className="model-upload-sheet__choice-grid model-upload-sheet__choice-grid--source">
           <button
             type="button"
-            className={`model-upload-sheet__choice${state.source === "local" ? " model-upload-sheet__choice--active" : ""}`}
+            className={`model-upload-sheet__choice model-upload-sheet__choice--source${state.source === "local" ? " model-upload-sheet__choice--active" : ""}`}
             onClick={() => dispatch({ type: "set-source", source: "local" })}
             data-testid="upload-source-local"
           >
             <strong>Local computer</strong>
-            <span>Upload files from your machine and register them in the local model storage.</span>
+            <span className="model-upload-sheet__choice-copy">
+              Upload files from your machine and register them in the local model storage.
+            </span>
+            <span
+              className="model-upload-sheet__choice-icon-shell model-upload-sheet__choice-icon-shell--local"
+              aria-hidden="true"
+            >
+              <LocalSourceIcon />
+            </span>
           </button>
           <button
             type="button"
-            className={`model-upload-sheet__choice${state.source === "huggingface" ? " model-upload-sheet__choice--active" : ""}`}
+            className={`model-upload-sheet__choice model-upload-sheet__choice--source${state.source === "huggingface" ? " model-upload-sheet__choice--active" : ""}`}
             onClick={() => dispatch({ type: "set-source", source: "huggingface" })}
             data-testid="upload-source-hf"
           >
             <strong>Hugging Face</strong>
-            <span>Inspect a remote repo, run a compatibility preflight, and import it locally.</span>
+            <span className="model-upload-sheet__choice-copy">
+              Inspect a remote repo, run a compatibility preflight, and import it locally.
+            </span>
+            <span
+              className="model-upload-sheet__choice-icon-shell model-upload-sheet__choice-icon-shell--huggingface"
+              aria-hidden="true"
+            >
+              <img
+                src={huggingFaceLogo}
+                alt=""
+                className="model-upload-sheet__choice-icon-image"
+              />
+            </span>
           </button>
         </div>
         {fieldErrorFor(state, "source") ? <small className="field-error">{fieldErrorFor(state, "source")}</small> : null}
       </div>
-
-      {state.source === "local" ? (
-        <div className="model-upload-sheet__section">
-          <div className="panel__eyebrow">Branching</div>
-          <h3>Do you already have registration config file(s)?</h3>
-          <div className="model-upload-sheet__choice-grid">
-            <button
-              type="button"
-              className={`model-upload-sheet__choice${state.localConfigAnswer === "uploaded" ? " model-upload-sheet__choice--active" : ""}`}
-              onClick={() => dispatch({ type: "set-local-config-answer", answer: "uploaded" })}
-              data-testid="upload-config-uploaded"
-            >
-              <strong>Yes</strong>
-              <span>We’ll validate your existing registration config, normalize it, and keep the final saved manifest aligned with the wizard.</span>
-            </button>
-            <button
-              type="button"
-              className={`model-upload-sheet__choice${state.localConfigAnswer === "generated" ? " model-upload-sheet__choice--active" : ""}`}
-              onClick={() => dispatch({ type: "set-local-config-answer", answer: "generated" })}
-              data-testid="upload-config-generated"
-            >
-              <strong>No</strong>
-              <span>We’ll generate the saved registration config from your answers and the uploaded artifacts.</span>
-            </button>
-          </div>
-          {fieldErrorFor(state, "local_config") ? <small className="field-error">{fieldErrorFor(state, "local_config")}</small> : null}
-        </div>
-      ) : null}
     </div>
   );
 
@@ -1366,11 +1354,9 @@ export function ModelUploadWizard({
         <div className="panel__eyebrow">Step 2</div>
         <h3>{branchHeading(branch)}</h3>
         <p>
-          {branch === "local-config-upload"
-            ? "We’ll use your existing registration config as a validated source of truth, then normalize the final saved manifest around the choices you confirm here."
-            : branch === "local-generated-config"
-              ? "This is the assisted path: you answer the important runtime and label questions, then the system generates the saved manifest for you."
-              : "Set the local registry metadata you want before we inspect the remote repo and generate the final manifest."}
+          {branch === "local"
+            ? "Set the local registry metadata you want first. On the next step you can optionally upload an existing registration config, or let the system generate the final saved manifest from your answers and artifacts."
+            : "Set the registry metadata you want before we inspect the remote repo and generate the final manifest."}
         </p>
       </div>
 
@@ -1384,56 +1370,55 @@ export function ModelUploadWizard({
     const requirements = ARTIFACT_REQUIREMENTS[currentFramework];
     return (
       <div className="model-upload-sheet__content">
-        {branch === "local-config-upload" ? (
-          <div className="model-upload-sheet__section">
-            <div className="panel__eyebrow">Existing Config</div>
-            <div className="model-upload-sheet__section-header">
-              <div>
-                <h3>Upload the existing registration config</h3>
-                <p>The backend validates the structure, checks compatibility with the selected model type, and normalizes the saved manifest before import.</p>
-              </div>
+        <div className="model-upload-sheet__section">
+          <div className="panel__eyebrow">Registration Config</div>
+          <div className="model-upload-sheet__section-header">
+            <div>
+              <h3>Optional existing registration config</h3>
+              <p>
+                Upload a saved manifest if you already have one and we’ll validate and normalize
+                it. If you leave this empty, the system will generate the final saved manifest from
+                your answers and uploaded artifacts.
+              </p>
             </div>
-
-            <label
-              htmlFor={fieldId("registration-config")}
-              className={`field-shell${fieldErrorFor(state, "registration_config") ? " field-shell--error" : ""}`}
-            >
-              <span>Registration config file</span>
-              <input
-                id={fieldId("registration-config")}
-                aria-label="Registration config file"
-                type="file"
-                accept=".yaml,.yml,.json"
-                multiple={false}
-                onChange={(event) =>
-                  dispatch({
-                    type: "set-registration-config-files",
-                    files: Array.from(event.target.files ?? []),
-                  })
-                }
-              />
-              <small>{fieldErrorFor(state, "registration_config") ?? "Upload the main saved manifest you already have (YAML or JSON)."}</small>
-              <div className="artifact-slot__list">
-                {state.registrationConfigFiles.length > 0 ? (
-                  state.registrationConfigFiles.map((file) => <span key={file.name}>{file.name}</span>)
-                ) : (
-                  <span>No config file selected.</span>
-                )}
-              </div>
-            </label>
-
-            <details className="model-upload-sheet__example-config" open>
-              <summary>Example config</summary>
-              <pre>{exampleConfigTemplate(currentFramework)}</pre>
-            </details>
           </div>
-        ) : (
-          <div className="model-upload-sheet__intro-card">
-            <div className="panel__eyebrow">Generated Config</div>
-            <h3>We’ll generate the saved manifest for you</h3>
-            <p>The generated config preview appears here after validation so you can review the exact runtime, labels, and artifact wiring before anything is imported.</p>
-          </div>
-        )}
+
+          <label
+            htmlFor={fieldId("registration-config")}
+            className={`field-shell${fieldErrorFor(state, "registration_config") ? " field-shell--error" : ""}`}
+          >
+            <span>Registration config file</span>
+            <input
+              id={fieldId("registration-config")}
+              aria-label="Registration config file"
+              type="file"
+              accept=".yaml,.yml,.json"
+              multiple={false}
+              onChange={(event) =>
+                dispatch({
+                  type: "set-registration-config-files",
+                  files: Array.from(event.target.files ?? []),
+                })
+              }
+            />
+            <small>
+              {fieldErrorFor(state, "registration_config")
+                ?? "Optional. Upload the main saved manifest you already have (YAML or JSON), or skip this and we’ll generate one."}
+            </small>
+            <div className="artifact-slot__list">
+              {state.registrationConfigFiles.length > 0 ? (
+                state.registrationConfigFiles.map((file) => <span key={file.name}>{file.name}</span>)
+              ) : (
+                <span>No config file selected.</span>
+              )}
+            </div>
+          </label>
+
+          <details className="model-upload-sheet__example-config" open>
+            <summary>Example config</summary>
+            <pre>{exampleConfigTemplate(currentFramework)}</pre>
+          </details>
+        </div>
 
         <div className="model-upload-sheet__section">
           <div className="panel__eyebrow">Artifacts</div>
@@ -1619,6 +1604,10 @@ export function ModelUploadWizard({
     }
 
     const warnings = state.preflight?.warnings ?? [];
+    const configSourceLabel =
+      isLocalPreflight(state.preflight) && state.preflight.config_source === "uploaded"
+        ? "Uploaded by user"
+        : "Generated by system";
     return (
       <div className="model-upload-sheet__content" data-testid="review-step">
         <div className="model-upload-sheet__section">
@@ -1629,7 +1618,7 @@ export function ModelUploadWizard({
               <span>{state.source === "huggingface" ? "Hugging Face" : "Local computer"}</span>
             </div>
             <div className="upload-review__item">
-              <strong>Branch</strong>
+              <strong>Upload mode</strong>
               <span>{branchHeading(branch)}</span>
             </div>
             <div className="upload-review__item">
@@ -1652,7 +1641,7 @@ export function ModelUploadWizard({
             </div>
             <div className="upload-review__item">
               <strong>Config source</strong>
-              <span>{branch === "local-config-upload" ? "Uploaded by user" : "Generated by system"}</span>
+              <span>{configSourceLabel}</span>
             </div>
             <div className="upload-review__item">
               <strong>Runtime</strong>
@@ -1897,9 +1886,6 @@ export function ModelUploadWizard({
         <aside className="model-upload-sheet__rail">
           <div className="panel__eyebrow">Upload Model</div>
           <h2 id="model-upload-sheet-title">{branchHeading(branch)}</h2>
-          <p>
-            Branching guided flow for local uploads and Hugging Face imports, with review and result screens before you leave.
-          </p>
 
           <div className="model-upload-sheet__stepper">
             {STEP_DEFS.map((step, index) => {
@@ -1916,19 +1902,13 @@ export function ModelUploadWizard({
               );
             })}
           </div>
-
-          <div className="model-upload-sheet__rail-summary">
-            <span className="dashboard-mini-chip">{state.source === "huggingface" ? "Hugging Face" : state.source === "local" ? "Local" : "Choose source"}</span>
-            <span className="dashboard-mini-chip">{branch ? branchHeading(branch) : "Branch pending"}</span>
-            <span className="dashboard-mini-chip">{frameworkLabel(currentFramework)}</span>
-          </div>
         </aside>
 
         <div className="model-upload-sheet__main">
           <header className="model-upload-sheet__header">
             <div>
               <div className="panel__eyebrow">Wizard</div>
-              <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>
+              {state.step === "source" ? null : <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>}
             </div>
             <button type="button" className="mini-button" onClick={closeWizard} disabled={!canClose}>
               Close
