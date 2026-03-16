@@ -194,6 +194,9 @@ def build_tfidf(word_ngrams=(1, 2), char_ngrams=True, max_features=30000):
     return X_tr_w, X_va_w, X_te_w, (word_vec,)
 
 # ── 8.1 EmbeddingMLP ─────────────────────────────────────────────────────────
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 class EmbeddingMLP(nn.Module):
     """
     Mean-pools pre-trained token embeddings, then applies a two-layer MLP.
