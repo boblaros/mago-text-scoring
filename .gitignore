@@ -1,5 +1,6 @@
 # ignore models and data inside submodules
 */models/
+!utils/models/
 */data/
 */archive/
 */prod-model/
