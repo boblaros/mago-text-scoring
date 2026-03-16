@@ -337,3 +337,28 @@ class BiLSTMAttention(nn.Module):
 
 print("BiLSTMAttention architecture defined.")
 
+def predict_one(text: str):
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        padding=True,
+        max_length=256
+    ).to(device)
+
+    outputs = model(**inputs)
+    logits = outputs.logits
+
+    probs = torch.softmax(logits, dim=-1)
+    conf, pred_id = torch.max(probs, dim=-1)
+
+    pred_id = int(pred_id.item())
+    confidence = float(conf.item())
+
+
+    if "le" in globals():
+        pred_label = le.inverse_transform([pred_id])[0]
+    else:
+        pred_label = str(pred_id)
+
+    return pred_label, confidence
