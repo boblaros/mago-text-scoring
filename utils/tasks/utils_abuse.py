@@ -148,3 +148,47 @@ def get_bert_embeddings(texts, tokenizer, model, max_len=256):
         cls_emb = out.last_hidden_state[:, 0, :].cpu().numpy()
         embeddings.append(cls_emb)
     return np.vstack(embeddings)
+
+def build_tfidf(word_ngrams=(1, 2), char_ngrams=True, max_features=30000):
+    from scipy.sparse import hstack
+
+    word_vec = TfidfVectorizer(
+        analyzer="word",
+        ngram_range=word_ngrams,
+        max_features=max_features,
+        sublinear_tf=True,
+        min_df=3,
+        max_df=0.95
+    )
+
+    X_tr_w = word_vec.fit_transform(X_train)
+    X_va_w = word_vec.transform(X_val)
+    X_te_w = word_vec.transform(X_test)
+
+    print("Word features:", X_tr_w.shape[1])
+
+    if char_ngrams:
+        char_vec = TfidfVectorizer(
+            analyzer="char_wb",
+            ngram_range=(3, 5),
+            max_features=10000,
+            sublinear_tf=True,
+            min_df=3
+        )
+
+        X_tr_c = char_vec.fit_transform(X_train)
+        X_va_c = char_vec.transform(X_val)
+        X_te_c = char_vec.transform(X_test)
+
+        print("Char features:", X_tr_c.shape[1])
+
+        X_tr = hstack([X_tr_w, X_tr_c])
+        X_va = hstack([X_va_w, X_va_c])
+        X_te = hstack([X_te_w, X_te_c])
+
+        print("Total features:", X_tr.shape[1])
+
+        return X_tr, X_va, X_te, (word_vec, char_vec)
+
+    print("Total features:", X_tr_w.shape[1])
+    return X_tr_w, X_va_w, X_te_w, (word_vec,)
