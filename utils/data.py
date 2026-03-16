@@ -538,3 +538,29 @@ def build_transformer_eval_bundle_from_df(df: pd.DataFrame, dataset_name: str, d
 def build_transformer_eval_bundle_from_parquet(data_path: Path, drop_duplicates: bool = False) -> dict:
     df = pd.read_parquet(data_path)
     return build_transformer_eval_bundle_from_df(df, dataset_name=data_path.stem, drop_duplicates=drop_duplicates)
+
+
+def get_small_bundle(data_bundle: dict, n: int = 1000, seed: int = 42) -> dict:
+    """
+    Returns a copy of `data_bundle` with the training arrays subsampled to at most `n` examples.
+
+    Parameters
+    ----------
+    data_bundle : dict with keys "X_train_raw", "y_train", and optionally "name"
+    n           : maximum training-set size to keep
+    seed        : random seed for reproducibility
+
+    Returns
+    -------
+    dict — same structure as `data_bundle` with training arrays replaced by the subsample
+    """
+    import random as _random
+    _random.seed(seed)
+    train_size = len(data_bundle["X_train_raw"])
+    indices = _random.sample(range(train_size), min(n, train_size))
+    return {
+        **data_bundle,
+        "X_train_raw": [data_bundle["X_train_raw"][i] for i in indices],
+        "y_train": [data_bundle["y_train"][i] for i in indices],
+        "name": data_bundle.get("name", "") + f"_small{n}",
+    }

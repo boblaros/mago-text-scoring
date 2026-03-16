@@ -521,3 +521,45 @@ def plot_cross_dataset_overview(
     plt.show()
 
     print(f"Cross-dataset overview plot saved to: {out_path}")
+
+
+def compute_umap_embeddings(
+    texts,
+    labels,
+    sample_n: int = 3000,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """
+    Compute 2D UMAP embeddings from raw texts using TF-IDF features.
+
+    Parameters
+    ----------
+    texts    : iterable of strings
+    labels   : iterable of class labels (same length as texts)
+    sample_n : randomly subsample to this many points if the corpus is larger
+    seed     : random seed for UMAP and sampling
+
+    Returns
+    -------
+    pd.DataFrame with columns ["X", "Y", "label"]
+    """
+    import random as _random
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    import umap  # type: ignore[import]
+
+    texts = list(texts)
+    labels = list(labels)
+
+    if len(texts) > sample_n:
+        _random.seed(seed)
+        idx = _random.sample(range(len(texts)), sample_n)
+        texts = [texts[i] for i in idx]
+        labels = [labels[i] for i in idx]
+
+    vec = TfidfVectorizer(max_features=5000)
+    X = vec.fit_transform(texts)
+
+    reducer = umap.UMAP(n_components=2, random_state=seed)
+    embedding = reducer.fit_transform(X)
+
+    return pd.DataFrame({"X": embedding[:, 0], "Y": embedding[:, 1], "label": labels})
