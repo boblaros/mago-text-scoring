@@ -1,6 +1,14 @@
 # ignore models and data inside submodules
-*/models/
+*/models/**
+!*/models/
+!*/models/**/
+!*/models/runs/
+!*/models/runs/**
+
+# keep utils models versioned
 !utils/models/
+!utils/models/**
+
 */data/
 */archive/
 */prod-model/
