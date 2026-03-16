@@ -192,3 +192,82 @@ def build_tfidf(word_ngrams=(1, 2), char_ngrams=True, max_features=30000):
 
     print("Total features:", X_tr_w.shape[1])
     return X_tr_w, X_va_w, X_te_w, (word_vec,)
+
+# ── 8.1 EmbeddingMLP ─────────────────────────────────────────────────────────
+class EmbeddingMLP(nn.Module):
+    """
+    Mean-pools pre-trained token embeddings, then applies a two-layer MLP.
+    Serves as the lightweight "GloVe + MLP" step in the pipeline.
+
+    Parameters
+    ----------
+    embedding_matrix : np.ndarray, shape (vocab_size, embed_dim)
+    num_classes      : number of output classes
+    hidden_dim       : hidden layer width
+    dropout          : dropout probability
+    freeze_emb       : if True, embedding weights are not updated during training
+    """
+    def __init__(self, embedding_matrix: np.ndarray, num_classes: int,
+                 hidden_dim: int = 256, dropout: float = 0.3,
+                 freeze_emb: bool = False):
+        super().__init__()
+        _, embed_dim = embedding_matrix.shape
+        self.embedding = nn.Embedding.from_pretrained(
+            torch.FloatTensor(embedding_matrix), freeze=freeze_emb, padding_idx=0
+        )
+        self.fc = nn.Sequential(
+            nn.Linear(embed_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, num_classes)
+        )
+
+    def forward(self, x):
+        mask = (x != 0).float().unsqueeze(-1)       # (B, L, 1) — zero out PAD
+        emb  = self.embedding(x) * mask             # (B, L, D)
+        doc  = emb.sum(1) / mask.sum(1).clamp(min=1)  # masked mean → (B, D)
+        return self.fc(doc)
+
+
+# ── 8.2 TextCNN ───────────────────────────────────────────────────────────────
+class TextCNN(nn.Module):
+    """
+    Parallel Conv1d filters over token embeddings with global max-pooling.
+
+    Parameters
+    ----------
+    embedding_matrix : np.ndarray, shape (vocab_size, embed_dim)
+    num_classes      : number of output classes
+    num_filters      : number of filters per kernel size
+    kernel_sizes     : list of filter heights (e.g. [2, 3, 4])
+    dropout          : dropout probability
+    freeze_emb       : if True, embedding weights are frozen
+    """
+    def __init__(self, embedding_matrix: np.ndarray, num_classes: int,
+                 num_filters: int = 128, kernel_sizes: list = None,
+                 dropout: float = 0.3, freeze_emb: bool = False):
+        super().__init__()
+        if kernel_sizes is None:
+            kernel_sizes = [2, 3, 4]
+
+        _, embed_dim = embedding_matrix.shape
+        self.embedding = nn.Embedding.from_pretrained(
+            torch.FloatTensor(embedding_matrix), freeze=freeze_emb, padding_idx=0
+        )
+        self.convs = nn.ModuleList([
+            nn.Conv1d(embed_dim, num_filters, kernel_size=k, padding=k // 2)
+            for k in kernel_sizes
+        ])
+        self.dropout = nn.Dropout(dropout)
+        self.fc      = nn.Linear(num_filters * len(kernel_sizes), num_classes)
+
+    def forward(self, x):
+        emb = self.embedding(x).permute(0, 2, 1)    # (B, D, L)
+        pooled = [
+            F.relu(conv(emb)).max(dim=2).values      # (B, F)
+            for conv in self.convs
+        ]
+        return self.fc(self.dropout(torch.cat(pooled, dim=1)))
+
+
+print("EmbeddingMLP and TextCNN architectures defined.")
