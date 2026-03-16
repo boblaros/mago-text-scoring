@@ -274,3 +274,66 @@ class TextCNN(nn.Module):
 
 
 print("EmbeddingMLP and TextCNN architectures defined.")
+
+# ── 9.1 Additive Attention ────────────────────────────────────────────────────
+class AdditiveAttention(nn.Module):
+    """
+    Computes a weighted average over LSTM hidden states.
+    Weights are learned via a single linear layer + softmax.
+    Padding positions are masked out before softmax.
+    """
+    def __init__(self, hidden_dim: int):
+        super().__init__()
+        self.attn = nn.Linear(hidden_dim, 1, bias=False)
+
+    def forward(self, h, mask=None):
+        scores = self.attn(h).squeeze(-1)                       # (B, L)
+        if mask is not None:
+            scores = scores.masked_fill(~mask, -1e9)
+        weights = torch.softmax(scores, dim=1)                  # (B, L)
+        context = (weights.unsqueeze(-1) * h).sum(dim=1)        # (B, H)
+        return context, weights
+
+
+# ── 9.2 BiLSTM + Attention ────────────────────────────────────────────────────
+class BiLSTMAttention(nn.Module):
+    """
+    Bidirectional LSTM with additive attention for text classification.
+
+    Parameters
+    ----------
+    embedding_matrix : np.ndarray, shape (vocab_size, embed_dim)
+    num_classes      : number of output classes
+    hidden_dim       : LSTM hidden state size per direction
+    num_layers       : number of stacked LSTM layers
+    dropout          : dropout probability
+    freeze_emb       : freeze pre-trained embeddings during training
+    """
+    def __init__(self, embedding_matrix: np.ndarray, num_classes: int,
+                 hidden_dim: int = 128, num_layers: int = 2,
+                 dropout: float = 0.3, freeze_emb: bool = False):
+        super().__init__()
+        _, embed_dim = embedding_matrix.shape
+        self.embedding = nn.Embedding.from_pretrained(
+            torch.FloatTensor(embedding_matrix), freeze=freeze_emb, padding_idx=0
+        )
+        self.lstm = nn.LSTM(
+            input_size=embed_dim, hidden_size=hidden_dim,
+            num_layers=num_layers, batch_first=True,
+            bidirectional=True,
+            dropout=dropout if num_layers > 1 else 0.0
+        )
+        self.attention = AdditiveAttention(hidden_dim * 2)   # *2 for bidirectional
+        self.dropout   = nn.Dropout(dropout)
+        self.fc        = nn.Linear(hidden_dim * 2, num_classes)
+
+    def forward(self, x):
+        mask = (x != 0)                              # (B, L) True = real token
+        emb  = self.dropout(self.embedding(x))       # (B, L, D)
+        h, _ = self.lstm(emb)                        # (B, L, 2*H)
+        ctx, _ = self.attention(h, mask)             # (B, 2*H)
+        return self.fc(self.dropout(ctx))
+
+
+print("BiLSTMAttention architecture defined.")
+
