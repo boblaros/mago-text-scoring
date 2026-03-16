@@ -1,13 +1,23 @@
-# ignore models and data inside submodules
-*/models/**
-!*/models/
-!*/models/**/
-!*/models/*/runs/
-!*/models/*/runs/**
-
-# keep utils models versioned
+# keep utils models versioned (code)
 !utils/models/
 !utils/models/**
+
+# ignore artifact content inside models
+*/models/**
+
+# allow walking through models tree
+!*/models/
+!*/models/**/
+
+# but keep unwanted artifact folders ignored
+*/models/archive/
+*/models/archive/**
+*/models/**/checkpoints/
+*/models/**/checkpoints/**
+
+# keep runs tracked under model folders
+!*/models/**/runs/
+!*/models/**/runs/**
 
 */data/
 */archive/

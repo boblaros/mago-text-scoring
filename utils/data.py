@@ -9,6 +9,8 @@ import shutil
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+from huggingface_hub import hf_hub_download
+
 
 import gensim.downloader as api
 import joblib
@@ -20,9 +22,11 @@ from torch.utils.data import DataLoader, Dataset
 
 from .text import normalize_text, preprocess_from_normalized
 
+
 CFG: dict = {}
 class2id: dict = {}
 splits: dict = {}
+RESULTS = {}
 
 def slugify(text: str) -> str:
     text = str(text).strip().lower()
@@ -488,9 +492,196 @@ def build_transformer_bundle_from_split(split_key: str) -> dict:
     }
 
 
-def build_transformer_bundle_from_parquet(data_path: Path, drop_duplicates: bool = False) -> dict:
+def render_cached_cross_dataset_eval(
+    display_name: str,
+    output_dir: Path,
+    bundle_name: str = "blog",
+):
+    from .plots import display_saved_plot
+
+    output_dir = Path(output_dir)
+
+    metrics_path = output_dir / "metrics_latest.json"
+    preds_latest_path = output_dir / "eval_preds_latest.npy"
+    cm_path = CFG["output_paths"]["plots_confusion"] / f"cm_{slugify(display_name)}.png"
+
+    if not metrics_path.exists():
+        raise FileNotFoundError(f"Cached metrics not found: {metrics_path}")
+
+    with open(metrics_path, "r", encoding="utf-8") as f:
+        cached_metrics = json.load(f)
+
+    if not isinstance(cached_metrics, dict) or "eval" not in cached_metrics:
+        raise ValueError(f"Invalid cached metrics payload: {metrics_path}")
+
+    eval_metrics = cached_metrics.get("eval", {})
+    RESULTS[f"{display_name} | eval"] = {
+        k: float(v) if isinstance(v, (int, float, np.integer, np.floating)) else v
+        for k, v in eval_metrics.items()
+    }
+
+    if preds_latest_path.exists():
+        print(f"{display_name}: loaded cached predictions -> {preds_latest_path.name}")
+    else:
+        print(f"{display_name}: cached predictions not found")
+
+    if cm_path.exists():
+        if display_saved_plot(cm_path, title=f"Confusion Matrix — {display_name}", figsize=(13, 5)):
+            print(f"Displayed existing confusion matrix: {cm_path}")
+    else:
+        print(f"Saved confusion matrix not found: {cm_path}")
+
+    print(f"{display_name}: loaded cached metrics -> skip evaluation ({metrics_path})")
+    print(f"{display_name} | EVAL metrics: {eval_metrics}")
+
+    eval_f1 = float(eval_metrics.get("f1_macro", np.nan)) if isinstance(eval_metrics, dict) else np.nan
+    print(f"Final evaluation F1 (macro) [{display_name}]: {eval_f1:.4f} (cached)")
+
+    return {
+        "model": display_name,
+        "metrics": cached_metrics,
+        "preds": {"eval": np.load(preds_latest_path) if preds_latest_path.exists() else np.asarray([], dtype=np.int64)},
+        "bundle_name": bundle_name,
+    }
+
+def load_cached_transformer_experiment(
+    display_name: str,
+    family_slug: str,
+    size_tag: str,
+    legacy_best_dirs=(),
+    legacy_checkpoint_dirs=(),
+):
+    
+    from .training import bootstrap_transformer_checkpoints
+    
+    exp_paths = resolve_experiment_paths(
+        model_family=family_slug,
+        dataset=CFG.get("experiment_dataset_slug", slugify(CFG.get("task", "dataset"))),
+        size_tag=size_tag,
+        model_root=CFG["model_dir"],
+    )
+
+    bootstrap_dir_from_legacy(exp_paths["best_model"], legacy_best_dirs)
+    bootstrap_transformer_checkpoints(exp_paths["checkpoints"], legacy_checkpoint_dirs)
+
+    best_model_dir = exp_paths["best_model"]
+    runs_dir = exp_paths["runs"]
+
+    transformer_metrics_dir = CFG["output_paths"]["metrics"] / "transformers"
+    transformer_metrics_dir.mkdir(parents=True, exist_ok=True)
+
+    cached_metric_paths = [
+        runs_dir / "metrics_latest.json",
+        transformer_metrics_dir / f"{slugify(display_name)}_latest.json",
+    ]
+
+    def _load_cached_metrics():
+        for p in cached_metric_paths:
+            if not p.exists():
+                continue
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    payload = json.load(f)
+                if isinstance(payload, dict) and "val" in payload and "test" in payload:
+                    return payload, p
+            except Exception as e:
+                print(f"{display_name}: could not load cached metrics from {p}: {e}")
+        return None, None
+
+    def _load_latest_preds(split_name: str):
+        latest_file = runs_dir / f"{split_name}_preds_latest.npy"
+        if latest_file.exists():
+            return np.load(latest_file), latest_file
+
+        candidates = sorted(runs_dir.glob(f"{split_name}_preds_*.npy"))
+        if candidates:
+            return np.load(candidates[-1]), candidates[-1]
+
+        return np.asarray([], dtype=np.int64), None
+
+    def _register_split_metrics(split_name: str, metrics: dict):
+        if not isinstance(metrics, dict):
+            return
+        clean_metrics = {}
+        for k, v in metrics.items():
+            if isinstance(v, (int, float, np.integer, np.floating)):
+                clean_metrics[k] = float(v)
+            else:
+                clean_metrics[k] = v
+        RESULTS[f"{display_name} | {split_name}"] = clean_metrics
+
+    cached_metrics, cached_path = _load_cached_metrics()
+    if cached_metrics is None:
+        raise FileNotFoundError(
+            f"{display_name}: cached metrics not found in any of: {cached_metric_paths}"
+        )
+
+    val_metrics = cached_metrics.get("val", {})
+    test_metrics = cached_metrics.get("test", {})
+
+    _register_split_metrics("val", val_metrics)
+    _register_split_metrics("test", test_metrics)
+
+    val_preds, val_pred_path = _load_latest_preds("val")
+    test_preds, test_pred_path = _load_latest_preds("test")
+
+    if val_pred_path is not None and test_pred_path is not None:
+        print(
+            f"{display_name}: loaded cached predictions -> "
+            f"{val_pred_path.name}, {test_pred_path.name}"
+        )
+    else:
+        print(f"{display_name}: cached predictions not found -> metrics-only return")
+
+    print(f"{display_name}: loaded cached metrics -> skip evaluation ({cached_path})")
+    print(f"{display_name} | VAL metrics: {val_metrics}")
+    print(f"{display_name} | TEST metrics: {test_metrics}")
+
+    val_f1 = float(val_metrics.get("f1_macro", np.nan)) if isinstance(val_metrics, dict) else np.nan
+    print(f"Final validation F1 (macro) [{display_name}]: {val_f1:.4f} (cached)")
+
+    return {
+        "name": display_name,
+        "val_preds": np.asarray(val_preds),
+        "test_preds": np.asarray(test_preds),
+        "y_val": None,
+        "y_test": None,
+        "df_test": None,
+        "best_dir": best_model_dir,
+        "paths": exp_paths,
+        "val_metrics": val_metrics,
+        "test_metrics": test_metrics,
+    }
+
+def build_transformer_bundle_from_parquet(
+    data_path: Path,
+    drop_duplicates: bool = False,
+    hf_repo_id: str | None = None,
+    hf_filename: str | None = None,
+    hf_repo_type: str = "dataset",
+) -> dict:
+    data_path = Path(data_path)
+
+    if data_path.exists():
+        source_path = data_path
+    else:
+        if hf_repo_id is None:
+            raise FileNotFoundError(
+                f"Local parquet file not found: {data_path}. "
+                "Provide hf_repo_id to download it from Hugging Face."
+            )
+
+        source_path = Path(
+            hf_hub_download(
+                repo_id=hf_repo_id,
+                repo_type=hf_repo_type,
+                filename=hf_filename or data_path.name,
+            )
+        )
+        print(f"Local file not found -> downloaded from Hugging Face: {source_path}")
+
     df = prepare_encoded_text_frame(
-        pd.read_parquet(data_path),
+        pd.read_parquet(source_path),
         cfg=CFG,
         label_mapping=class2id,
         drop_duplicates=drop_duplicates,
@@ -499,12 +690,12 @@ def build_transformer_bundle_from_parquet(data_path: Path, drop_duplicates: bool
 
     split = make_splits_and_arrays(df, CFG)
     print(
-        f"{data_path.name}: train={len(split['X_train']):,} | "
+        f"{source_path.name}: train={len(split['X_train']):,} | "
         f"val={len(split['X_val']):,} | test={len(split['X_test']):,}"
     )
 
     return {
-        "name": data_path.stem,
+        "name": source_path.stem,
         "df_test": split["df_test"].copy(),
         "X_train_raw": np.asarray(split["X_train_raw"], dtype=object),
         "X_val_raw": np.asarray(split["X_val_raw"], dtype=object),

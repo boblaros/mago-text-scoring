@@ -1041,7 +1041,6 @@ def bootstrap_transformer_checkpoints(dst_dir: Path, legacy_candidates=()):
         print(f"Bootstrapped transformer checkpoints from legacy: {cand}")
         break
 
-
 def run_transformer_experiment(
     display_name: str,
     family_slug: str,
@@ -1118,46 +1117,50 @@ def run_transformer_experiment(
                 clean_metrics[k] = v
         RESULTS[f"{display_name} | {split_name}"] = clean_metrics
 
-    skip_eval_with_cache = has_best_model and (not CFG.get("run_transformer_eval", True))
+    cached_metrics, cached_path = _load_cached_metrics()
+    skip_eval_with_cache = (
+        not CFG.get("run_transformer_eval", True)
+        and cached_metrics is not None
+    )
+
     if skip_eval_with_cache:
-        cached_metrics, cached_path = _load_cached_metrics()
-        if cached_metrics is not None:
-            val_metrics = cached_metrics.get("val", {})
-            test_metrics = cached_metrics.get("test", {})
+        val_metrics = cached_metrics.get("val", {})
+        test_metrics = cached_metrics.get("test", {})
 
-            _register_split_metrics("val", val_metrics)
-            _register_split_metrics("test", test_metrics)
+        _register_split_metrics("val", val_metrics)
+        _register_split_metrics("test", test_metrics)
 
-            val_preds, val_pred_path = _load_latest_preds("val")
-            test_preds, test_pred_path = _load_latest_preds("test")
+        val_preds, val_pred_path = _load_latest_preds("val")
+        test_preds, test_pred_path = _load_latest_preds("test")
 
-            if val_pred_path is not None and test_pred_path is not None:
-                print(
-                    f"{display_name}: loaded cached predictions -> "
-                    f"{val_pred_path.name}, {test_pred_path.name}"
-                )
-            else:
-                print(f"{display_name}: cached predictions not found -> metrics-only return")
+        if val_pred_path is not None and test_pred_path is not None:
+            print(
+                f"{display_name}: loaded cached predictions -> "
+                f"{val_pred_path.name}, {test_pred_path.name}"
+            )
+        else:
+            print(f"{display_name}: cached predictions not found -> metrics-only return")
 
-            val_f1 = float(val_metrics.get("f1_macro", np.nan)) if isinstance(val_metrics, dict) else np.nan
-            print(f"{display_name}: loaded cached metrics -> skip evaluation ({cached_path})")
-            print(f"{display_name} | VAL metrics: {val_metrics}")
-            print(f"{display_name} | TEST metrics: {test_metrics}")
-            print(f"Final validation F1 (macro) [{display_name}]: {val_f1:.4f} (cached)")
+        val_f1 = float(val_metrics.get("f1_macro", np.nan)) if isinstance(val_metrics, dict) else np.nan
+        print(f"{display_name}: loaded cached metrics -> skip evaluation ({cached_path})")
+        print(f"{display_name} | VAL metrics: {val_metrics}")
+        print(f"{display_name} | TEST metrics: {test_metrics}")
+        print(f"Final validation F1 (macro) [{display_name}]: {val_f1:.4f} (cached)")
 
-            return {
-                "name": display_name,
-                "val_preds": np.asarray(val_preds),
-                "test_preds": np.asarray(test_preds),
-                "y_val": data_bundle["y_val"],
-                "y_test": data_bundle["y_test"],
-                "df_test": data_bundle["df_test"].copy().reset_index(drop=True),
-                "best_dir": best_model_dir,
-                "paths": exp_paths,
-                "val_metrics": val_metrics,
-                "test_metrics": test_metrics,
-            }
+        return {
+            "name": display_name,
+            "val_preds": np.asarray(val_preds),
+            "test_preds": np.asarray(test_preds),
+            "y_val": data_bundle["y_val"],
+            "y_test": data_bundle["y_test"],
+            "df_test": data_bundle["df_test"].copy().reset_index(drop=True),
+            "best_dir": best_model_dir,
+            "paths": exp_paths,
+            "val_metrics": val_metrics,
+            "test_metrics": test_metrics,
+        }
 
+    if not CFG.get("run_transformer_eval", True):
         print(f"{display_name}: run_transformer_eval=False but cached metrics not found -> running evaluation")
 
     tokenizer_src = str(best_model_dir) if has_best_model else model_name
@@ -1204,7 +1207,12 @@ def run_transformer_experiment(
             seed=CFG["seed"],
         )
 
-        training_args = _make_training_args(common_args, eval_mode=eval_mode, eval_steps=eval_steps, save_steps=save_steps)
+        training_args = _make_training_args(
+            common_args,
+            eval_mode=eval_mode,
+            eval_steps=eval_steps,
+            save_steps=save_steps,
+        )
 
         trainer = Trainer(
             model=trf_model,
@@ -1299,7 +1307,6 @@ def run_transformer_experiment(
         "val_metrics": val_metrics,
         "test_metrics": test_metrics,
     }
-
 
 # ── PyTorch text-classification architectures ─────────────────────────────────
 
