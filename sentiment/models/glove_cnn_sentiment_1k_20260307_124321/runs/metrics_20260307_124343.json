@@ -1,0 +1,14 @@
+{
+  "val": {
+    "accuracy": 0.9490015360983103,
+    "f1_macro": 0.9487636332523943,
+    "f1_weighted": 0.9487636332523942
+  },
+  "test": {
+    "accuracy": 0.9490015360983103,
+    "f1_macro": 0.9488035382450457,
+    "f1_weighted": 0.9488035382450456
+  },
+  "experiment_dir": "models/glove_cnn_reddit_1k_20260307_124321",
+  "best_checkpoint": "models/glove_cnn_reddit_1k_20260307_124321/best_model/best.pt"
+}

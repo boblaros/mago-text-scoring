@@ -1,0 +1,14 @@
+{
+  "val": {
+    "accuracy": 0.9622119815668203,
+    "f1_macro": 0.9620231610185426,
+    "f1_weighted": 0.9620231610185425
+  },
+  "test": {
+    "accuracy": 0.9621351766513057,
+    "f1_macro": 0.9620145031162464,
+    "f1_weighted": 0.9620145031162466
+  },
+  "experiment_dir": "models/glove_cnn_sentiment_60k_20260307_122405",
+  "best_checkpoint": "models/glove_cnn_sentiment_60k_20260307_122405/best_model/best.pt"
+}
