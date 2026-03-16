@@ -1,0 +1,14 @@
+{
+  "val": {
+    "accuracy": 0.30666666666666664,
+    "f1_macro": 0.3069171830057059,
+    "f1_weighted": 0.3069171830057059
+  },
+  "test": {
+    "accuracy": 0.29333333333333333,
+    "f1_macro": 0.2892874867068415,
+    "f1_weighted": 0.2892874867068415
+  },
+  "experiment_dir": "models/tf_idf_logreg_reddit_1k_20260302_144254",
+  "best_model_file": "models/tf_idf_logreg_reddit_1k_20260302_144254/best_model/model.pkl"
+}

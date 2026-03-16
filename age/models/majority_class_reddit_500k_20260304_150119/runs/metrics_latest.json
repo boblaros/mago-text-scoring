@@ -1,0 +1,14 @@
+{
+  "val": {
+    "accuracy": 0.20033417992247027,
+    "f1_macro": 0.06675946857912848,
+    "f1_weighted": 0.06687101694929813
+  },
+  "test": {
+    "accuracy": 0.20033417992247027,
+    "f1_macro": 0.06675946857912848,
+    "f1_weighted": 0.06687101694929813
+  },
+  "experiment_dir": "models/majority_class_reddit_500k_20260304_150119",
+  "best_model_file": "models/majority_class_reddit_500k_20260304_150119/best_model/model.pkl"
+}

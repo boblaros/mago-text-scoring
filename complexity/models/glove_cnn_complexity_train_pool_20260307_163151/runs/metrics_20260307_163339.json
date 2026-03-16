@@ -1,0 +1,14 @@
+{
+  "val": {
+    "accuracy": 0.6744671337009986,
+    "f1_macro": 0.6303509816605484,
+    "f1_weighted": 0.6712168813094422
+  },
+  "test": {
+    "accuracy": 0.6795349530481443,
+    "f1_macro": 0.6388266463257223,
+    "f1_weighted": 0.6766999349479854
+  },
+  "experiment_dir": "models/glove_cnn_complexity_train_pool_20260307_163151",
+  "best_checkpoint": "models/glove_cnn_complexity_train_pool_20260307_163151/best_model/best.pt"
+}

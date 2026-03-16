@@ -1,0 +1,14 @@
+{
+  "val": {
+    "accuracy": 0.36466666666666664,
+    "f1_macro": 0.3602227854804292,
+    "f1_weighted": 0.36022278548042913
+  },
+  "test": {
+    "accuracy": 0.35133333333333333,
+    "f1_macro": 0.34456430556651496,
+    "f1_weighted": 0.34456430556651496
+  },
+  "experiment_dir": "models/glove_bilstm_reddit_10k_20260302_163731",
+  "best_checkpoint": "models/glove_bilstm_reddit_10k_20260302_163731/best_model/best.pt"
+}

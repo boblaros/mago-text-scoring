@@ -1,0 +1,15 @@
+{
+  "val": {
+    "accuracy": 0.7677746310925623,
+    "f1_macro": 0.7371779636790571,
+    "f1_weighted": 0.7648968334776791
+  },
+  "test": {
+    "accuracy": 0.7746310925622298,
+    "f1_macro": 0.7430667400906253,
+    "f1_weighted": 0.7720896637566615
+  },
+  "best_model_dir": "models/distilbert_complexity_train_pool_20260307_164409/best_model",
+  "checkpoints_dir": "models/distilbert_complexity_train_pool_20260307_164409/checkpoints",
+  "experiment_dir": "models/distilbert_complexity_train_pool_20260307_164409"
+}

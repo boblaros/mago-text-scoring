@@ -1,0 +1,14 @@
+{
+  "val": {
+    "accuracy": 0.38905937291527687,
+    "f1_macro": 0.38828035732959265,
+    "f1_weighted": 0.38827020999268924
+  },
+  "test": {
+    "accuracy": 0.380653769179453,
+    "f1_macro": 0.379931430176677,
+    "f1_weighted": 0.379931430176677
+  },
+  "experiment_dir": "models/tf_idf_xgboost_reddit_50k_20260304_145832",
+  "best_model_file": "models/tf_idf_xgboost_reddit_50k_20260304_145832/best_model/model.pkl"
+}
