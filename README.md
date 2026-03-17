@@ -31,18 +31,21 @@ mago-text-scoring/
 │
 ├── age/                        # Age group prediction task
 │   ├── age-code.ipynb          # Main training & evaluation notebook
-│   └── datasets-preparation.ipynb  # Dataset preprocessing
+│   ├── datasets-preparation.ipynb  # Dataset preprocessing
+│   └── environment.yml         # Task-specific Conda environment
 │
 ├── complexity/                 # Text complexity assessment task
 │   ├── complexity-code.ipynb   # Main training & evaluation notebook
 │   ├── data-preparation.ipynb  # Dataset preprocessing
-│   └── local_deberta_resume.py # DeBERTa fine-tuning script (resumable)
+│   ├── local_deberta_resume.py # DeBERTa fine-tuning script (resumable)
+│   └── environment.yml         # Task-specific Conda environment
 │
 ├── sentiment/                  # Sentiment analysis task (7 classes)
-│   └── Sentiment.ipynb         # Main training & evaluation notebook
+│   ├── sentiment-code.ipynb    # Main training & evaluation notebook
+│   └── environment.yml         # Task-specific Conda environment
 │
 ├── abuse/                      # Abusive/hate speech detection task
-│   └── abuse_notebook.ipynb    # Main training & evaluation notebook
+│   └── abuse-code.ipynb        # Main training & evaluation notebook
 │
 ├── utils/                      # Shared utility modules (used by all notebooks)
 │   ├── data.py                 # Data loading, splitting, encoding, dataset classes
@@ -62,10 +65,8 @@ mago-text-scoring/
 │
 ├── app/                        # FastAPI backend + React frontend (inference service)
 │   ├── backend/                # REST API for model inference
-│   ├── frontend/               # React + TypeScript dashboard
-│   └── app-models/             # Model configs and artifacts for the app
+│   └── frontend/               # React + TypeScript dashboard
 │
-├── environment.yml             # Conda environment specification
 └── LICENSE
 ```
 
@@ -94,8 +95,10 @@ cd mago-text-scoring
 
 **2. Create and activate the Conda environment**
 
+Each task folder contains its own `environment.yml` with only the dependencies needed for that task (e.g., `sentiment/environment.yml`, `age/environment.yml`):
+
 ```bash
-conda env create -f environment.yml
+conda env create -f sentiment/environment.yml
 conda activate nlp-project
 ```
 

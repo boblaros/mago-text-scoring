@@ -1,0 +1,31 @@
+name: nlp-project
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - scikit-learn
+  - xgboost
+  - matplotlib
+  - seaborn
+  - plotly
+  - tqdm
+  - joblib
+  - gensim
+  - nltk
+  - jupyterlab
+  - ipykernel
+  - ipywidgets
+  - pip:
+      - torch==2.10.0
+      - transformers
+      - accelerate
+      - tokenizers
+      - sentencepiece
+      - datasets
+      - huggingface_hub
+      - duckdb
+      - safetensors
+      - python-slugify
