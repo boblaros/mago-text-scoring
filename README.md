@@ -1,5 +1,7 @@
 # MAGO — Multi-task Text Scoring System
 
+![MAGO App](utils/assets/app-screenshot.png)
+
 **MAGO** is a multi-task Natural Language Processing (NLP) system capable of evaluating textual data across four distinct dimensions: sentiment, text complexity, author age group, and abusive content detection.
 
 The project was developed as part of the course *Data Visualization and Text Mining* at Università Cattolica del Sacro Cuore (Milan) by four students:
@@ -8,7 +10,7 @@ The project was developed as part of the course *Data Visualization and Text Min
 - Orlando Pérez Basurto,
 - Aleksandra Laricheva.
 
-A report is included that presents a comprehensive analysis of all results and the work conducted.
+A full project report is included in `project-report` at the root of this repository.
 
 ---
 
@@ -25,6 +27,18 @@ Each task follows a consistent pipeline: data loading → preprocessing → mode
 ---
 
 ## 2. Repository Structure
+
+### Task folders
+
+Each of the four NLP tasks has its own folder and follows the same internal layout. Within each task folder, the following subdirectories are generated automatically during a run and are **not tracked in git**:
+
+- `logs/` — training logs produced during model fitting
+- `models/` — saved model checkpoints (**does not contain pre-trained weights**; model weights are stored on HuggingFace and linked in the notebooks)
+- `outputs/` — evaluation results, plots, confusion matrices, and cached artifacts
+
+> **No `data/` folder is included in this repository.** Datasets are hosted on HuggingFace and are either downloaded automatically on first run or can be loaded locally — both options are supported inside each notebook.
+
+### Full structure
 
 ```
 mago-text-scoring/
@@ -45,7 +59,8 @@ mago-text-scoring/
 │   └── environment.yml         # Task-specific Conda environment
 │
 ├── abuse/                      # Abusive/hate speech detection task
-│   └── abuse-code.ipynb        # Main training & evaluation notebook
+│   ├── abuse-code.ipynb        # Main training & evaluation notebook
+│   └── environment.yml         # Task-specific Conda environment
 │
 ├── utils/                      # Shared utility modules (used by all notebooks)
 │   ├── data.py                 # Data loading, splitting, encoding, dataset classes
@@ -57,16 +72,19 @@ mago-text-scoring/
 │   │   ├── architectures.py    # PyTorch model definitions (MLP, CNN, BiLSTM+Attention)
 │   │   ├── inference.py        # Inference helpers for deep and transformer models
 │   │   └── loading.py          # Model and artifact loading utilities
-│   └── tasks/
-│       ├── sentiment.py        # Sentiment-specific label mapping and inference
-│       ├── age.py              # Age binning, PAN dataset handling
-│       ├── complexity.py       # Complexity task helpers
-│       └── utils_abuse.py      # Abuse detection utilities
+│   ├── tasks/
+│   │   ├── sentiment.py        # Sentiment-specific label mapping and inference
+│   │   ├── age.py              # Age binning, PAN dataset handling
+│   │   ├── complexity.py       # Complexity task helpers
+│   │   └── utils_abuse.py      # Abuse detection utilities
+│   └── assets/                 # Repository assets (screenshots, etc.)
 │
 ├── app/                        # FastAPI backend + React frontend (inference service)
 │   ├── backend/                # REST API for model inference
-│   └── frontend/               # React + TypeScript dashboard
+│   ├── frontend/               # React + TypeScript dashboard
+│   └── README.md               # Setup and usage instructions for the app
 │
+├── project-report              # Full project report
 └── LICENSE
 ```
 
@@ -127,18 +145,24 @@ Each task has its own notebook. Open and run them independently:
 2. Run cells from top to bottom in order.
 3. Dataset downloading and preprocessing happen automatically in the first sections.
 4. Model training progresses through baselines → deep models → transformers.
-5. Results and plots are saved automatically to the task's `outputs/` and `results/` folders.
+5. Results and plots are saved automatically to the task's `outputs/` folder.
+
+*Note:* Each notebook contains its own CFG (configuration) variable, which defines its workflow. The general structure of the CFG file is the same for all notebooks, but its contents depend on the specific task and settings. For instructions on how to run a specific notebook, see the introductory section at the beginning of each notebook.
 
 **Datasets:**
-- Some tasks use datasets from [HuggingFace Datasets](https://huggingface.co/datasets) (downloaded automatically on first run).
-- The age task uses PAN datasets; the abuse task uses a cyberbullying tweets dataset.
+- Datasets are hosted on [HuggingFace Datasets](https://huggingface.co/datasets) and are **not included** in this repository.
+- Each notebook supports both automatic download from HuggingFace (on first run) and manual local loading — see the notebook's dataset section for details.
+
+**App:**
+
+The `app/` folder contains a separate FastAPI + React application for running model inference via a REST API. It provides a web dashboard where you can analyze text across all four domains interactively. See [`app/README.md`](app/README.md) for full setup and usage instructions.
 
 ---
 
 ## 5. Notes
 
 - **Training time:** Transformer models (DistilBERT, RoBERTa, DeBERTa) require significant compute. GPU is strongly recommended.
-- **Automatic downloads:** Datasets and pre-trained model weights (GloVe embeddings, HuggingFace models) are downloaded automatically the first time a cell runs.
+- **Automatic downloads:** Pre-trained model weights (GloVe embeddings, HuggingFace models) are downloaded automatically the first time a cell runs.
+- **Model weights:** Trained model weights are not stored in this repository. Links to HuggingFace model checkpoints are provided within the respective notebooks.
 - **Caching:** Results and preprocessed data are cached locally. Re-running a notebook skips expensive steps if outputs are already present.
 - **Reproducibility:** All experiments use a fixed random seed (`seed=42`).
-- **App backend:** The `app/` folder contains a separate FastAPI + React application for serving model predictions via a REST API. See `app/README.md` for details.
