@@ -45,13 +45,10 @@ mago-text-scoring/
 │
 ├── age/                        # Age group prediction task
 │   ├── age-code.ipynb          # Main training & evaluation notebook
-│   ├── datasets-preparation.ipynb  # Dataset preprocessing
 │   └── environment.yml         # Task-specific Conda environment
 │
 ├── complexity/                 # Text complexity assessment task
 │   ├── complexity-code.ipynb   # Main training & evaluation notebook
-│   ├── data-preparation.ipynb  # Dataset preprocessing
-│   ├── local_deberta_resume.py # DeBERTa fine-tuning script (resumable)
 │   └── environment.yml         # Task-specific Conda environment
 │
 ├── sentiment/                  # Sentiment analysis task (7 classes)
