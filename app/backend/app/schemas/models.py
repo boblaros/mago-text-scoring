@@ -211,7 +211,7 @@ class UploadFileDescriptor(BaseModel):
 
 
 class LocalUploadPreflightRequest(BaseModel):
-    metadata: UploadModelMetadata
+    metadata: UploadModelMetadata | None = None
     artifact_manifest: dict[str, list[UploadFileDescriptor]] = Field(default_factory=dict)
     dashboard_manifest: list[UploadFileDescriptor] = Field(default_factory=list)
 

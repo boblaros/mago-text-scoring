@@ -1,0 +1,16 @@
+# Labels
+labels = [
+    "religion",
+    "age",
+    "ethnicity",
+    "gender",
+    "not_cyberbullying",
+    "other_cyberbullying",
+]
+
+# Data
+dataset_counts = {
+    "cyberbullying": [7927, 7880, 7400, 7360, 6356, 5230],
+}
+
+COLORS = ["#003366", "#0066CC", "#4DA6FF", "#99CCFF", "#CCE5FF", "#A9CCE3"]

@@ -44,11 +44,17 @@ import {
 } from "./modelUploadWizardSchema";
 
 type PreflightResult = LocalUploadPreflightResponse | HuggingFacePreflightResponse;
+type LocalConfigMode = "unknown" | "uploaded-config" | "manual-metadata";
+type LocalDetailsStage = "question" | "details";
+type LabelInputMode = "manual" | "file" | "raw";
 
 interface WizardState {
   step: WizardStep;
   source: UploadSource | null;
   metadata: WizardMetadataDraft;
+  localConfigMode: LocalConfigMode;
+  localDetailsStage: LocalDetailsStage;
+  labelInputMode: LabelInputMode;
   domainMode: "existing" | "new";
   existingDomain: string;
   newDomainDisplayName: string;
@@ -69,6 +75,9 @@ type WizardAction =
   | { type: "reset"; existingDomain: string }
   | { type: "set-step"; step: WizardStep }
   | { type: "set-source"; source: UploadSource }
+  | { type: "set-local-config-mode"; mode: LocalConfigMode }
+  | { type: "set-local-details-stage"; stage: LocalDetailsStage }
+  | { type: "set-label-input-mode"; mode: LabelInputMode }
   | { type: "set-domain-mode"; mode: "existing" | "new" }
   | { type: "set-existing-domain"; domain: string }
   | { type: "set-new-domain"; key: "display_name" | "color_token" | "group"; value: string }
@@ -91,11 +100,10 @@ type WizardAction =
 
 const STEP_DEFS: Array<{ id: WizardStep; label: string }> = [
   { id: "source", label: "Source" },
-  { id: "details", label: "Questions" },
-  { id: "validate", label: "Validate" },
+  { id: "details", label: "Model Name & Task" },
+  { id: "validate", label: "Model Artifacts" },
   { id: "review", label: "Review" },
-  { id: "progress", label: "Progress" },
-  { id: "result", label: "Result" },
+  { id: "result", label: "Results" },
 ];
 
 function LocalSourceIcon() {
@@ -115,11 +123,117 @@ function LocalSourceIcon() {
   );
 }
 
+function ReadyConfigIcon() {
+  return (
+    <svg viewBox="0 0 48 48" className="model-upload-sheet__choice-icon" aria-hidden="true">
+      <path d="M15 10h13l5 5v23H15z" />
+      <path d="M28 10v5h5" />
+      <path d="M18.5 23.5l3.8 3.8L29.5 20" />
+      <path d="M19 34h10" />
+    </svg>
+  );
+}
+
+function ManualMetadataIcon() {
+  return (
+    <svg viewBox="0 0 48 48" className="model-upload-sheet__choice-icon" aria-hidden="true">
+      <path d="M14 14h20" />
+      <path d="M14 22h20" />
+      <path d="M14 30h12" />
+      <circle cx="19" cy="14" r="2.5" />
+      <circle cx="27" cy="22" r="2.5" />
+      <path d="M30.5 28.5l6 6" />
+      <path d="M33.5 25.5l3 3" />
+    </svg>
+  );
+}
+
+function UploadSuccessIcon() {
+  return (
+    <svg viewBox="0 0 48 48" className="model-upload-sheet__success-icon-svg" aria-hidden="true">
+      <circle cx="24" cy="24" r="18" />
+      <path d="M16.5 24.5l5.2 5.2L31.5 18.8" />
+    </svg>
+  );
+}
+
+type ArtifactVisualKind = "weights" | "tokenizer" | "config" | "dashboard" | "generic";
+
+function resolveArtifactVisualKind(slot: string): ArtifactVisualKind {
+  if (slot === "weights") {
+    return "weights";
+  }
+  if (slot === "tokenizer" || slot === "vocabulary") {
+    return "tokenizer";
+  }
+  if (slot === "config") {
+    return "config";
+  }
+  if (slot === "dashboard") {
+    return "dashboard";
+  }
+  return "generic";
+}
+
+function ArtifactCardIcon({ kind }: { kind: ArtifactVisualKind }) {
+  if (kind === "weights") {
+    return (
+      <svg viewBox="0 0 24 24" className="artifact-slot__icon" aria-hidden="true">
+        <rect x="5" y="5" width="14" height="4" rx="2" />
+        <rect x="3.5" y="10" width="17" height="4" rx="2" />
+        <rect x="5" y="15" width="14" height="4" rx="2" />
+      </svg>
+    );
+  }
+  if (kind === "tokenizer") {
+    return (
+      <svg viewBox="0 0 24 24" className="artifact-slot__icon" aria-hidden="true">
+        <path d="M7 4.5h7l3 3v12H7z" />
+        <path d="M14 4.5v3h3" />
+        <path d="M9.5 11h5" />
+        <path d="M9.5 14h5" />
+        <path d="M9.5 17h3.5" />
+      </svg>
+    );
+  }
+  if (kind === "config") {
+    return (
+      <svg viewBox="0 0 24 24" className="artifact-slot__icon" aria-hidden="true">
+        <path d="M5 7.5h14" />
+        <path d="M5 12h14" />
+        <path d="M5 16.5h14" />
+        <circle cx="9" cy="7.5" r="1.8" />
+        <circle cx="15" cy="12" r="1.8" />
+        <circle cx="11" cy="16.5" r="1.8" />
+      </svg>
+    );
+  }
+  if (kind === "dashboard") {
+    return (
+      <svg viewBox="0 0 24 24" className="artifact-slot__icon" aria-hidden="true">
+        <rect x="4.5" y="4.5" width="6" height="6" rx="1.6" />
+        <rect x="13.5" y="4.5" width="6" height="10" rx="1.6" />
+        <rect x="4.5" y="13.5" width="6" height="6" rx="1.6" />
+        <rect x="13.5" y="17.5" width="6" height="2" rx="1" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" className="artifact-slot__icon" aria-hidden="true">
+      <path d="M7 4.5h7l3 3v12H7z" />
+      <path d="M14 4.5v3h3" />
+    </svg>
+  );
+}
+
 function createInitialState(existingDomain: string): WizardState {
   return {
     step: "source",
     source: null,
     metadata: createDefaultMetadataDraft(),
+    localConfigMode: "unknown",
+    localDetailsStage: "question",
+    labelInputMode: "manual",
     domainMode: "existing",
     existingDomain,
     newDomainDisplayName: "",
@@ -137,6 +251,57 @@ function createInitialState(existingDomain: string): WizardState {
   };
 }
 
+function detectFrameworkTypeFromConfigText(text: string): FrameworkType | null {
+  try {
+    const parsed = JSON.parse(text) as {
+      framework?: { type?: string };
+      framework_type?: string;
+    };
+    const frameworkType = parsed.framework?.type ?? parsed.framework_type;
+    if (frameworkType === "transformers" || frameworkType === "pytorch" || frameworkType === "sklearn") {
+      return frameworkType;
+    }
+  } catch {
+    // Fall through to a lightweight YAML-style scan.
+  }
+
+  const lines = text.split(/\r?\n/);
+  let inFrameworkBlock = false;
+  let frameworkIndent = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const indent = line.length - line.trimStart().length;
+    if (!inFrameworkBlock && trimmed === "framework:") {
+      inFrameworkBlock = true;
+      frameworkIndent = indent;
+      continue;
+    }
+    if (!inFrameworkBlock) {
+      continue;
+    }
+    if (indent <= frameworkIndent) {
+      inFrameworkBlock = false;
+      continue;
+    }
+
+    const typeMatch = trimmed.match(/^type:\s*["']?([a-z-]+)["']?\s*$/i);
+    if (!typeMatch) {
+      continue;
+    }
+    const frameworkType = typeMatch[1];
+    if (frameworkType === "transformers" || frameworkType === "pytorch" || frameworkType === "sklearn") {
+      return frameworkType;
+    }
+    return null;
+  }
+
+  return null;
+}
+
 function clearExecutionState(state: WizardState): WizardState {
   return {
     ...state,
@@ -146,10 +311,140 @@ function clearExecutionState(state: WizardState): WizardState {
     submissionStatus: "idle",
     result: null,
     step:
-      state.step === "review" || state.step === "progress" || state.step === "result"
+      state.step === "review" || state.step === "result"
         ? "details"
         : state.step,
   };
+}
+
+function defaultLabelDisplayName(label: UploadLabelClass) {
+  return `Class ${label.id}`;
+}
+
+function applyLabelPatch(
+  label: UploadLabelClass,
+  patch: Partial<UploadLabelClass>,
+): UploadLabelClass {
+  const nextLabel = { ...label, ...patch };
+
+  if (typeof patch.name === "string") {
+    const keepsDefaultDisplayName =
+      !label.display_name ||
+      label.display_name === label.name ||
+      label.display_name === defaultLabelDisplayName(label);
+    if (keepsDefaultDisplayName) {
+      nextLabel.display_name = patch.name;
+    }
+  }
+
+  return nextLabel;
+}
+
+function normalizeLabelClasses(labels: UploadLabelClass[]): UploadLabelClass[] {
+  return labels.map((label) => ({
+    ...label,
+    display_name: label.display_name ?? label.name,
+  }));
+}
+
+function toRawLabel(label: UploadLabelClass): UploadLabelClass {
+  const rawValue = String(label.id);
+  return {
+    id: label.id,
+    name: rawValue,
+    display_name: rawValue,
+  };
+}
+
+function normalizeRawLabels(labels: UploadLabelClass[]): UploadLabelClass[] {
+  if (labels.length === 0) {
+    return [{ id: 0, name: "0", display_name: "0" }];
+  }
+  return labels.map(toRawLabel);
+}
+
+function createNextRawLabel(labels: UploadLabelClass[]): UploadLabelClass {
+  const id = labels.reduce((current, label) => Math.max(current, label.id), -1) + 1;
+  return {
+    id,
+    name: String(id),
+    display_name: String(id),
+  };
+}
+
+function parseLabelMapPayload(payload: unknown): UploadLabelClass[] | null {
+  if (Array.isArray(payload)) {
+    const labels = payload
+      .map((value, index) =>
+        typeof value === "string" && value.trim()
+          ? {
+              id: index,
+              name: value.trim(),
+              display_name: value.trim(),
+            }
+          : null,
+      )
+      .filter((label): label is UploadLabelClass => label !== null);
+    return labels.length > 0 ? labels : null;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  if (record.id2label) {
+    return parseLabelMapPayload(record.id2label);
+  }
+  if (record.label2id) {
+    return parseLabelMapPayload(record.label2id);
+  }
+
+  const entries = Object.entries(record);
+  if (entries.length === 0) {
+    return null;
+  }
+
+  const numericKeyEntries = entries
+    .map(([key, value]) => {
+      const id = Number(key);
+      if (!Number.isInteger(id) || typeof value !== "string" || !value.trim()) {
+        return null;
+      }
+      return {
+        id,
+        name: value.trim(),
+        display_name: value.trim(),
+      } satisfies UploadLabelClass;
+    })
+    .filter((label): label is UploadLabelClass => label !== null)
+    .sort((left, right) => left.id - right.id);
+  if (numericKeyEntries.length === entries.length) {
+    return numericKeyEntries;
+  }
+
+  const numericValueEntries = entries
+    .map(([key, value]) => {
+      if (typeof key !== "string" || !key.trim()) {
+        return null;
+      }
+      const id = Number(value);
+      if (!Number.isInteger(id)) {
+        return null;
+      }
+      return {
+        id,
+        name: key.trim(),
+        display_name: key.trim(),
+      } satisfies UploadLabelClass;
+    })
+    .filter((label): label is UploadLabelClass => label !== null)
+    .sort((left, right) => left.id - right.id);
+  if (numericValueEntries.length === entries.length) {
+    return numericValueEntries;
+  }
+
+  return null;
 }
 
 function wizardReducer(state: WizardState, action: WizardAction): WizardState {
@@ -162,8 +457,53 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return {
         ...clearExecutionState(state),
         source: action.source,
+        localConfigMode: action.source === "local" ? "unknown" : state.localConfigMode,
+        localDetailsStage: action.source === "local" ? "question" : "details",
         step: "source",
       };
+    case "set-local-config-mode":
+      return {
+        ...clearExecutionState(state),
+        localConfigMode: action.mode,
+        labelInputMode: action.mode === "uploaded-config" ? "manual" : state.labelInputMode,
+        artifactFiles:
+          action.mode === "uploaded-config"
+            ? {
+                ...state.artifactFiles,
+                label_map_file: [],
+              }
+            : state.artifactFiles,
+        registrationConfigFiles:
+          action.mode === "manual-metadata" ? [] : state.registrationConfigFiles,
+      };
+    case "set-local-details-stage":
+      return {
+        ...state,
+        localDetailsStage: action.stage,
+        fieldErrors: {},
+        message: null,
+      };
+    case "set-label-input-mode": {
+      const nextState = clearExecutionState(state);
+      return {
+        ...nextState,
+        labelInputMode: action.mode,
+        metadata: {
+          ...nextState.metadata,
+          labels:
+            action.mode === "raw"
+              ? normalizeRawLabels(state.metadata.labels)
+              : nextState.metadata.labels,
+        },
+        artifactFiles:
+          action.mode === "file"
+            ? nextState.artifactFiles
+            : {
+                ...nextState.artifactFiles,
+                label_map_file: [],
+              },
+      };
+    }
     case "set-domain-mode":
       return {
         ...clearExecutionState(state),
@@ -234,7 +574,17 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         metadata: {
           ...state.metadata,
           labels: state.metadata.labels.map((label, index) =>
-            index === action.index ? { ...label, ...action.patch } : label,
+            index === action.index
+              ? state.labelInputMode === "raw"
+                ? toRawLabel({
+                    ...label,
+                    id:
+                      typeof action.patch.id === "number" && Number.isFinite(action.patch.id)
+                        ? action.patch.id
+                        : label.id,
+                  })
+                : applyLabelPatch(label, action.patch)
+              : label,
           ),
         },
       };
@@ -243,7 +593,12 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         ...clearExecutionState(state),
         metadata: {
           ...state.metadata,
-          labels: [...state.metadata.labels, createNextLabel(state.metadata.labels)],
+          labels: [
+            ...state.metadata.labels,
+            state.labelInputMode === "raw"
+              ? createNextRawLabel(state.metadata.labels)
+              : createNextLabel(state.metadata.labels),
+          ],
         },
       };
     case "remove-label":
@@ -293,7 +648,7 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
     case "start-submit":
       return {
         ...state,
-        step: "progress",
+        step: "review",
         submissionStatus: "running",
         fieldErrors: {},
         message: null,
@@ -301,7 +656,7 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
     case "submit-error":
       return {
         ...state,
-        step: "progress",
+        step: "review",
         submissionStatus: "error",
         fieldErrors: action.errors ?? {},
         message: action.message,
@@ -364,6 +719,8 @@ function mapApiFieldErrors(error: unknown): Record<string, string> {
   for (const [key, value] of Object.entries(raw)) {
     if (key === "metadata.model_id") {
       mapped.model_id = value;
+    } else if (key === "metadata") {
+      mapped.local_config_mode = value;
     } else if (key === "metadata.framework_type") {
       mapped.framework_type = value;
     } else if (key === "huggingface.repo") {
@@ -380,6 +737,21 @@ function validateDetailsStep(
   domains: DomainChoice[],
 ): Record<string, string> {
   const errors: Record<string, string> = {};
+  const canUploadLabelMapFile =
+    state.source === "local" && state.metadata.framework_type === "transformers";
+  if (state.source === "local") {
+    if (state.localConfigMode === "unknown") {
+      errors.local_config_mode = "Choose whether you already have a ready upload config.";
+      return errors;
+    }
+    if (state.localConfigMode === "uploaded-config") {
+      if (state.registrationConfigFiles.length === 0) {
+        errors.registration_config = "Upload the existing registration config file to continue.";
+      }
+      return errors;
+    }
+  }
+
   const domainChoice = resolveDomainChoice(state, domains);
 
   if (!state.metadata.display_name.trim()) {
@@ -412,6 +784,14 @@ function validateDetailsStep(
   }
   if (state.metadata.runtime_batch_size < 1) {
     errors.runtime_batch_size = "Batch size must be at least 1.";
+  }
+  if (
+    state.labelInputMode === "file" &&
+    canUploadLabelMapFile &&
+    (state.artifactFiles.label_map_file ?? []).length === 0
+  ) {
+    errors["artifacts.label_map_file"] =
+      "Upload a label map file or switch to manual or raw numbers.";
   }
   if (state.metadata.labels.length === 0) {
     errors.labels = "At least one label is required.";
@@ -456,6 +836,7 @@ async function validateLocalFilesStep(
   for (const requirement of requirements) {
     const files = state.artifactFiles[requirement.slot] ?? [];
     if (requirement.required && files.length === 0) {
+      errors[`artifacts.${requirement.slot}`] = `${requirement.title} requires at least 1 file.`;
       continue;
     }
 
@@ -508,6 +889,9 @@ async function validateLocalFilesStep(
 }
 
 function getCurrentMetadata(state: WizardState, domains: DomainChoice[]) {
+  if (state.source === "local" && state.localConfigMode === "uploaded-config") {
+    return null;
+  }
   const domainChoice = resolveDomainChoice(state, domains);
   if (!domainChoice) {
     return null;
@@ -527,21 +911,6 @@ function isHuggingFacePreflight(
   return Boolean(value && "ready_to_import" in value);
 }
 
-function progressStages(branch: BranchMode | null): string[] {
-  if (branch === "huggingface") {
-    return [
-      "Validate the remote repo and confirm compatibility.",
-      "Download the selected Hugging Face artifacts into local model storage.",
-      "Generate the registry manifest and refresh the live catalog snapshot.",
-    ];
-  }
-  return [
-    "Re-validate the selected files and registration settings.",
-    "Copy artifacts into local model storage and write the manifest.",
-    "Refresh the live catalog snapshot so the model appears in management immediately.",
-  ];
-}
-
 export function ModelUploadWizard({
   isOpen,
   domains,
@@ -553,15 +922,24 @@ export function ModelUploadWizard({
     createInitialState(domains[0]?.domain ?? ""),
   );
   const fieldIdPrefix = useId();
-  const stepOrder = useMemo(() => STEP_DEFS.map((step) => step.id), []);
   const branch = resolveBranchMode(state.source);
   const domainChoice = resolveDomainChoice(state, domains);
   const currentMetadata = useMemo(() => getCurrentMetadata(state, domains), [state, domains]);
   const currentFramework = state.metadata.framework_type;
+  const canUploadLabelMapFile = branch === "local" && currentFramework === "transformers";
+  const visibleArtifactRequirements = useMemo(
+    () =>
+      ARTIFACT_REQUIREMENTS[currentFramework].filter(
+        (requirement) =>
+          requirement.slot !== "label_map_file" && requirement.slot !== "label_classes_file",
+      ),
+    [currentFramework],
+  );
+  const mainPanelRef = useRef<HTMLDivElement | null>(null);
   const validateControllerRef = useRef<AbortController | null>(null);
   const submitControllerRef = useRef<AbortController | null>(null);
-  const [optionalMetadataOpen, setOptionalMetadataOpen] = useState(false);
-  const [optionalRuntimeOpen, setOptionalRuntimeOpen] = useState(false);
+  const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(false);
+  const [reviewConfigOpen, setReviewConfigOpen] = useState(false);
   const fieldId = (suffix: string) => `${fieldIdPrefix}-${suffix}`;
   const renderInfoLabel = (label: string, tooltip: string) => (
     <span className="field-shell__label-row">
@@ -588,6 +966,44 @@ export function ModelUploadWizard({
       !
     </span>
   );
+  const handleRegistrationConfigFilesChange = async (files: File[]) => {
+    dispatch({ type: "set-registration-config-files", files });
+    const primaryFile = files[0];
+    if (!primaryFile) {
+      return;
+    }
+
+    const detectedFrameworkType = detectFrameworkTypeFromConfigText(await primaryFile.text());
+    if (!detectedFrameworkType) {
+      return;
+    }
+    dispatch({
+      type: "set-metadata",
+      key: "framework_type",
+      value: detectedFrameworkType,
+    });
+  };
+  const handleLabelMapFilesChange = async (files: File[]) => {
+    dispatch({ type: "set-artifact-files", slot: "label_map_file", files });
+    const primaryFile = files[0];
+    if (!primaryFile || !primaryFile.name.toLowerCase().endsWith(".json")) {
+      return;
+    }
+    try {
+      const parsed = parseLabelMapPayload(JSON.parse(await primaryFile.text()));
+      if (!parsed || parsed.length === 0) {
+        return;
+      }
+      dispatch({
+        type: "patch-metadata",
+        patch: {
+          labels: normalizeLabelClasses(parsed),
+        },
+      });
+    } catch {
+      // Keep the uploaded file even if the browser cannot prefill labels from it.
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) {
@@ -608,15 +1024,100 @@ export function ModelUploadWizard({
     }
   }, [domains, state.existingDomain]);
 
+  useEffect(() => {
+    const container = mainPanelRef.current?.querySelector<HTMLDivElement>(
+      ".model-upload-sheet__content",
+    );
+    if (!container) {
+      return;
+    }
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      return;
+    }
+    container.scrollTop = 0;
+  }, [state.step]);
+
+  useEffect(() => {
+    if (state.labelInputMode === "file" && !canUploadLabelMapFile) {
+      dispatch({ type: "set-label-input-mode", mode: "manual" });
+    }
+  }, [canUploadLabelMapFile, state.labelInputMode]);
+
+  useEffect(() => {
+    if (state.step !== "review" && reviewConfigOpen) {
+      setReviewConfigOpen(false);
+    }
+  }, [reviewConfigOpen, state.step]);
+
+  useEffect(() => {
+    if (!reviewConfigOpen) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setReviewConfigOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [reviewConfigOpen]);
+
   if (!isOpen) {
     return null;
   }
 
-  const currentStepIndex = stepOrder.indexOf(state.step);
   const canClose = state.submissionStatus !== "running";
-  const canGoToReview =
-    (isLocalPreflight(state.preflight) && state.preflight.ready) ||
-    (isHuggingFacePreflight(state.preflight) && state.preflight.ready_to_import);
+  const isSubmitting = state.submissionStatus === "running";
+  const validationErrors = Object.entries(state.fieldErrors)
+    .filter(([key]) =>
+      branch === "huggingface"
+        ? key === "hf_repo"
+        : key === "dashboard" || key.startsWith("artifacts."),
+    )
+    .map(([, value]) => value);
+  const validateStatus =
+    state.step !== "validate" || !branch
+      ? null
+      : branch === "huggingface"
+        ? isHuggingFacePreflight(state.preflight)
+          ? state.preflight.ready_to_import
+            ? null
+            : {
+                tone: "error",
+                title: "Validation failed",
+                detail:
+                  state.preflight.blocking_reasons[0] ?? "The repo still has blocking issues.",
+              }
+          : state.message === "Inspecting the remote repo..."
+            ? null
+            : validationErrors[0] || state.message
+              ? {
+                  tone: "error",
+                  title: "Validation failed",
+                  detail:
+                    validationErrors[0] ??
+                    state.message ??
+                    "The repo still needs attention before import.",
+                }
+              : null
+        : isLocalPreflight(state.preflight)
+          ? state.preflight.ready
+            ? null
+            : {
+                tone: "error",
+                title: "Validation failed",
+                detail: null,
+              }
+          : state.message === "Validating files and building a config preview..."
+            ? null
+            : validationErrors[0] || state.message
+              ? {
+                  tone: "error",
+                  title: "Validation failed",
+                  detail: null,
+                }
+              : null;
 
   const closeWizard = () => {
     if (!canClose) {
@@ -625,23 +1126,32 @@ export function ModelUploadWizard({
     onClose();
   };
 
-  const handleSourceNext = () => {
-    const errors: Record<string, string> = {};
-    if (!state.source) {
-      errors.source = "Choose where the model is coming from.";
-    }
-    if (Object.keys(errors).length > 0) {
-      dispatch({
-        type: "set-errors",
-        errors,
-        message: "Choose an upload source to continue.",
-      });
-      return;
-    }
+  const handleSourceSelection = (source: UploadSource) => {
+    dispatch({ type: "set-source", source });
     dispatch({ type: "set-step", step: "details" });
   };
 
+  const handleLocalConfigModeSelection = (mode: Exclude<LocalConfigMode, "unknown">) => {
+    dispatch({ type: "set-local-config-mode", mode });
+    if (state.localDetailsStage === "question") {
+      dispatch({ type: "set-local-details-stage", stage: "details" });
+    }
+  };
+
   const handleDetailsNext = () => {
+    if (branch === "local" && state.localDetailsStage === "question") {
+      if (state.localConfigMode === "unknown") {
+        dispatch({
+          type: "set-errors",
+          errors: { local_config_mode: "Choose whether you already have a ready upload config." },
+          message: "Choose how you want to continue.",
+        });
+        return;
+      }
+      dispatch({ type: "set-local-details-stage", stage: "details" });
+      return;
+    }
+
     const errors = validateDetailsStep(state, domains);
     if (Object.keys(errors).length > 0) {
       dispatch({
@@ -654,8 +1164,12 @@ export function ModelUploadWizard({
     dispatch({ type: "set-step", step: "validate" });
   };
 
+  const handleDetailsBack = () => {
+    dispatch({ type: "set-step", step: "source" });
+  };
+
   const handleRunValidation = async () => {
-    if (!branch || !currentMetadata || !domainChoice) {
+    if (!branch) {
       dispatch({
         type: "set-errors",
         errors: { source: "Finish the earlier steps first." },
@@ -665,6 +1179,14 @@ export function ModelUploadWizard({
     }
 
     if (branch === "huggingface") {
+      if (!currentMetadata || !domainChoice) {
+        dispatch({
+          type: "set-errors",
+          errors: { source: "Finish the earlier steps first." },
+          message: "The wizard needs source and metadata details before validation can run.",
+        });
+        return;
+      }
       const errors: Record<string, string> = {};
       if (!state.hfRepoInput.trim()) {
         errors.hf_repo = "Paste a Hugging Face model URL or repo id.";
@@ -695,6 +1217,9 @@ export function ModelUploadWizard({
           type: "apply-normalized-metadata",
           metadata: fromUploadMetadata(response.normalized_metadata),
         });
+        if (response.ready_to_import) {
+          dispatch({ type: "set-step", step: "review" });
+        }
       } catch (error) {
         dispatch({
           type: "set-errors",
@@ -723,8 +1248,8 @@ export function ModelUploadWizard({
       "payload",
       JSON.stringify(
         buildLocalPreflightPayload(
-          state.metadata,
-          domainChoice,
+          state.localConfigMode === "uploaded-config" ? null : state.metadata,
+          state.localConfigMode === "uploaded-config" ? null : domainChoice,
           state.artifactFiles,
           state.dashboardFiles,
         ),
@@ -741,6 +1266,9 @@ export function ModelUploadWizard({
         type: "apply-normalized-metadata",
         metadata: fromUploadMetadata(response.normalized_metadata),
       });
+      if (response.ready) {
+        dispatch({ type: "set-step", step: "review" });
+      }
     } catch (error) {
       dispatch({
         type: "set-errors",
@@ -751,7 +1279,7 @@ export function ModelUploadWizard({
   };
 
   const handleSubmit = async () => {
-    if (!branch || !currentMetadata || !state.preflight) {
+    if (!branch || !state.preflight) {
       dispatch({
         type: "set-errors",
         errors: {},
@@ -767,6 +1295,9 @@ export function ModelUploadWizard({
     try {
       let response: ModelRegistrationResponse;
       if (branch === "huggingface") {
+        if (!currentMetadata) {
+          throw new Error("The wizard lost the model metadata before import.");
+        }
         response = await importHuggingFaceModel(
           {
             repo: state.hfRepoInput.trim(),
@@ -780,8 +1311,15 @@ export function ModelUploadWizard({
           "payload",
           JSON.stringify(
             buildLocalPreflightPayload(
-              state.metadata,
-              domainChoice!,
+              state.localConfigMode === "uploaded-config"
+                ? fromUploadMetadata(state.preflight.normalized_metadata)
+                : state.metadata,
+              state.localConfigMode === "uploaded-config" ? {
+                domain: state.preflight.normalized_metadata.domain,
+                display_name: state.preflight.normalized_metadata.ui_display_name ?? "",
+                color_token: state.preflight.normalized_metadata.color_token ?? "",
+                group: state.preflight.normalized_metadata.group ?? null,
+              } : domainChoice,
               state.artifactFiles,
               state.dashboardFiles,
             ),
@@ -819,14 +1357,11 @@ export function ModelUploadWizard({
         <div className="model-upload-sheet__choice-grid model-upload-sheet__choice-grid--source">
           <button
             type="button"
-            className={`model-upload-sheet__choice model-upload-sheet__choice--source${state.source === "local" ? " model-upload-sheet__choice--active" : ""}`}
-            onClick={() => dispatch({ type: "set-source", source: "local" })}
+            className="model-upload-sheet__choice model-upload-sheet__choice--source"
+            onClick={() => handleSourceSelection("local")}
             data-testid="upload-source-local"
           >
             <strong>Local computer</strong>
-            <span className="model-upload-sheet__choice-copy">
-              Upload files from your machine and register them in the local model storage.
-            </span>
             <span
               className="model-upload-sheet__choice-icon-shell model-upload-sheet__choice-icon-shell--local"
               aria-hidden="true"
@@ -836,14 +1371,11 @@ export function ModelUploadWizard({
           </button>
           <button
             type="button"
-            className={`model-upload-sheet__choice model-upload-sheet__choice--source${state.source === "huggingface" ? " model-upload-sheet__choice--active" : ""}`}
-            onClick={() => dispatch({ type: "set-source", source: "huggingface" })}
+            className="model-upload-sheet__choice model-upload-sheet__choice--source"
+            onClick={() => handleSourceSelection("huggingface")}
             data-testid="upload-source-hf"
           >
             <strong>Hugging Face</strong>
-            <span className="model-upload-sheet__choice-copy">
-              Inspect a remote repo, run a compatibility preflight, and import it locally.
-            </span>
             <span
               className="model-upload-sheet__choice-icon-shell model-upload-sheet__choice-icon-shell--huggingface"
               aria-hidden="true"
@@ -967,10 +1499,10 @@ export function ModelUploadWizard({
 
   const renderMetadataSection = () => (
     <div className="model-upload-sheet__section">
-      <div className="panel__eyebrow">Model Metadata</div>
+      <div className="panel__eyebrow">Model Name &amp; Task</div>
       <div className="model-upload-sheet__subsection">
-        <div className="model-upload-sheet__subsection-header">
-          <strong>Required</strong>
+        <div className="model-upload-sheet__subsection-header model-upload-sheet__subsection-header--aside">
+          <span>Required</span>
         </div>
         <div className="model-upload-sheet__grid">
         <label
@@ -1047,6 +1579,43 @@ export function ModelUploadWizard({
           {fieldErrorFor(state, "model_id") ? <small>{fieldErrorFor(state, "model_id")}</small> : null}
         </label>
 
+        <label
+          htmlFor={fieldId("framework-task")}
+          className={`field-shell${fieldErrorFor(state, "framework_task") ? " field-shell--error" : ""}`}
+        >
+          <span className="field-shell__label-row">
+            <span>Task</span>
+            <span
+              className="field-info-badge"
+              tabIndex={0}
+              role="note"
+              aria-label="Visible and editable because it affects runtime compatibility."
+              data-tooltip="Visible and editable because it affects runtime compatibility."
+            >
+              i
+            </span>
+            {state.metadata.framework_task !== "sequence-classification"
+              ? renderWarningBadge(
+                  "This task selector is future-facing for now. Only Sequence Classification is currently runtime-supported.",
+                )
+              : null}
+          </span>
+          <select
+            id={fieldId("framework-task")}
+            value={state.metadata.framework_task}
+            onChange={(event) =>
+              dispatch({ type: "set-metadata", key: "framework_task", value: event.target.value })
+            }
+          >
+            {TASK_OPTIONS.map((task) => (
+              <option key={task.value} value={task.value}>
+                {task.label}
+              </option>
+            ))}
+          </select>
+          {fieldErrorFor(state, "framework_task") ? <small>{fieldErrorFor(state, "framework_task")}</small> : null}
+        </label>
+
         {branch !== "huggingface" ? (
           <label
             htmlFor={fieldId("framework-type")}
@@ -1087,58 +1656,237 @@ export function ModelUploadWizard({
             {fieldErrorFor(state, "framework_type") ? <small>{fieldErrorFor(state, "framework_type")}</small> : null}
           </label>
         ) : null}
-
-        <label
-          htmlFor={fieldId("framework-task")}
-          className={`field-shell${fieldErrorFor(state, "framework_task") ? " field-shell--error" : ""}`}
-        >
-          <span className="field-shell__label-row">
-            <span>Task</span>
-            <span
-              className="field-info-badge"
-              tabIndex={0}
-              role="note"
-              aria-label="Visible and editable because it affects runtime compatibility."
-              data-tooltip="Visible and editable because it affects runtime compatibility."
-            >
-              i
-            </span>
-            {state.metadata.framework_task !== "sequence-classification"
-              ? renderWarningBadge(
-                  "This task selector is future-facing for now. Only Sequence Classification is currently runtime-supported.",
-                )
-              : null}
-          </span>
-          <select
-            id={fieldId("framework-task")}
-            value={state.metadata.framework_task}
-            onChange={(event) =>
-              dispatch({ type: "set-metadata", key: "framework_task", value: event.target.value })
-            }
-          >
-            {TASK_OPTIONS.map((task) => (
-              <option key={task.value} value={task.value}>
-                {task.label}
-              </option>
-            ))}
-          </select>
-          {fieldErrorFor(state, "framework_task") ? <small>{fieldErrorFor(state, "framework_task")}</small> : null}
-        </label>
         </div>
       </div>
+    </div>
+  );
 
+  const renderLabelsSection = () => (
+    <div className="model-upload-sheet__section">
+      <div className="panel__eyebrow">Labels</div>
+      <div className="model-upload-sheet__subsection">
+        <div className="model-upload-sheet__grid">
+          <div className={`field-shell field-shell--wide${fieldErrorFor(state, "labels") ? " field-shell--error" : ""}`}>
+            <div className="model-upload-sheet__label-mode-row">
+              <span className="model-upload-sheet__label-mode-copy">
+                How do you want to define the labels?
+              </span>
+              <div className="model-upload-sheet__toggle-row" role="group" aria-label="Label input mode">
+                <button
+                  type="button"
+                  className={`mini-button${state.labelInputMode === "manual" ? " mini-button--active" : ""}`}
+                  onClick={() => dispatch({ type: "set-label-input-mode", mode: "manual" })}
+                  data-testid="label-input-mode-manual"
+                >
+                  Manual
+                </button>
+                {canUploadLabelMapFile ? (
+                  <button
+                    type="button"
+                    className={`mini-button${state.labelInputMode === "file" ? " mini-button--active" : ""}`}
+                    onClick={() => dispatch({ type: "set-label-input-mode", mode: "file" })}
+                    data-testid="label-input-mode-file"
+                  >
+                    Upload file
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className={`mini-button${state.labelInputMode === "raw" ? " mini-button--active" : ""}`}
+                  onClick={() => dispatch({ type: "set-label-input-mode", mode: "raw" })}
+                  data-testid="label-input-mode-raw"
+                >
+                  Raw numbers
+                </button>
+              </div>
+            </div>
+
+            {state.labelInputMode === "file" ? (
+              <div
+                className={`field-shell field-shell--nested${
+                  fieldErrorFor(state, "artifacts.label_map_file") ? " field-shell--error" : ""
+                }`}
+              >
+                <label htmlFor={fieldId("runtime-label-map-file")} className="field-shell__nested-control">
+                  {renderInfoLabel(
+                    "Label map file",
+                    "Upload a JSON label map to prefill names, or keep a PKL file as an artifact for runtime use.",
+                  )}
+                  <input
+                    id={fieldId("runtime-label-map-file")}
+                    aria-label="Label map file"
+                    type="file"
+                    accept=".json,.pkl"
+                    multiple={false}
+                    onChange={(event) =>
+                      void handleLabelMapFilesChange(Array.from(event.target.files ?? []))
+                    }
+                  />
+                </label>
+                <small>
+                  {fieldErrorFor(state, "artifacts.label_map_file")
+                    ?? "JSON files auto-fill labels when possible. PKL files are kept as uploaded artifacts."}
+                </small>
+                <div className="artifact-slot__list artifact-slot__list--preview">
+                  {(state.artifactFiles.label_map_file ?? []).length > 0 ? (
+                    (state.artifactFiles.label_map_file ?? []).map((file) => (
+                      <span key={`label-map-${file.name}`}>{file.name}</span>
+                    ))
+                  ) : (
+                    <span>No label map file selected.</span>
+                  )}
+                </div>
+                <div className="artifact-slot__list artifact-slot__list--preview">
+                  {state.metadata.labels.map((label) => (
+                    <span key={`label-preview-${label.id}`}>
+                      {label.display_name || label.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="label-editor">
+                  {state.metadata.labels.map((label, index) => (
+                    <div
+                      key={`${label.id}-${index}`}
+                      className={`label-editor__row${
+                        state.labelInputMode === "raw" ? " label-editor__row--raw" : ""
+                      }`}
+                    >
+                      <div className="model-upload-sheet__input-stack">
+                        <input
+                          type="number"
+                          value={label.id}
+                          onChange={(event) =>
+                            dispatch({
+                              type: "update-label",
+                              index,
+                              patch: { id: Number(event.target.value) },
+                            })
+                          }
+                        />
+                        {fieldErrorFor(state, `label-id-${index}`) ? (
+                          <small className="field-error">{fieldErrorFor(state, `label-id-${index}`)}</small>
+                        ) : null}
+                      </div>
+                      {state.labelInputMode === "raw" ? (
+                        <div className="label-editor__raw-copy">
+                          <span className="label-editor__raw-pair">
+                            <span>name</span>
+                            <strong>{String(label.id)}</strong>
+                          </span>
+                          <span className="label-editor__raw-pair">
+                            <span>display</span>
+                            <strong>{String(label.id)}</strong>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="model-upload-sheet__input-stack">
+                          <input
+                            value={label.name}
+                            onChange={(event) =>
+                              dispatch({
+                                type: "update-label",
+                                index,
+                                patch: { name: event.target.value },
+                              })
+                            }
+                            placeholder="label_name"
+                          />
+                          {fieldErrorFor(state, `label-name-${index}`) ? (
+                            <small className="field-error">{fieldErrorFor(state, `label-name-${index}`)}</small>
+                          ) : null}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="mini-button"
+                        onClick={() => dispatch({ type: "remove-label", index })}
+                        disabled={state.metadata.labels.length === 1}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {state.labelInputMode === "raw" ? (
+                  <div className="field-inline-note">
+                    Each numeric id is reused as both the internal label name and the display name.
+                  </div>
+                ) : null}
+                <div className="label-editor__actions">
+                  <button type="button" className="mini-button" onClick={() => dispatch({ type: "add-label" })}>
+                    Add label
+                  </button>
+                  {fieldErrorFor(state, "labels") ? <span>{fieldErrorFor(state, "labels")}</span> : null}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderOptionalDetailsSection = () => (
+    <div className="model-upload-sheet__section">
       <details
         className="model-upload-sheet__subsection model-upload-sheet__subsection--collapsible"
-        open={optionalMetadataOpen}
-        onToggle={(event) => setOptionalMetadataOpen((event.currentTarget as HTMLDetailsElement).open)}
+        open={optionalDetailsOpen}
+        onToggle={(event) => setOptionalDetailsOpen((event.currentTarget as HTMLDetailsElement).open)}
       >
         <summary className="model-upload-sheet__subsection-summary">
-          <span className="model-upload-sheet__subsection-header">
-            <strong>Optional</strong>
+          <span className="model-upload-sheet__subsection-header model-upload-sheet__subsection-header--summary-only">
+            <small>Advanced metadata and runtime settings</small>
           </span>
           <span className="model-upload-sheet__subsection-chevron" aria-hidden="true" />
         </summary>
         <div className="model-upload-sheet__grid">
+        <label
+          htmlFor={fieldId("runtime-max-sequence-length")}
+          className={`field-shell${fieldErrorFor(state, "runtime_max_sequence_length") ? " field-shell--error" : ""}`}
+        >
+          {renderInfoLabel("Max sequence length", "Used during tokenization to truncate or pad input.")}
+          <input
+            id={fieldId("runtime-max-sequence-length")}
+            type="number"
+            min={1}
+            value={state.metadata.runtime_max_sequence_length}
+            onChange={(event) =>
+              dispatch({
+                type: "set-metadata",
+                key: "runtime_max_sequence_length",
+                value: Number(event.target.value),
+              })
+            }
+          />
+          {fieldErrorFor(state, "runtime_max_sequence_length") ? (
+            <small>{fieldErrorFor(state, "runtime_max_sequence_length")}</small>
+          ) : null}
+        </label>
+
+        <label
+          htmlFor={fieldId("runtime-batch-size")}
+          className={`field-shell${fieldErrorFor(state, "runtime_batch_size") ? " field-shell--error" : ""}`}
+        >
+          {renderInfoLabel("Batch size", "Reserved for future functionality.")}
+          <input
+            id={fieldId("runtime-batch-size")}
+            type="number"
+            min={1}
+            value={state.metadata.runtime_batch_size}
+            onChange={(event) =>
+              dispatch({
+                type: "set-metadata",
+                key: "runtime_batch_size",
+                value: Number(event.target.value),
+              })
+            }
+          />
+          {fieldErrorFor(state, "runtime_batch_size") ? <small>{fieldErrorFor(state, "runtime_batch_size")}</small> : null}
+        </label>
+
         <label htmlFor={fieldId("description")} className="field-shell field-shell--wide">
           <span className="field-shell__label-row">
             <span>Description</span>
@@ -1174,7 +1922,6 @@ export function ModelUploadWizard({
             placeholder="v1"
           />
         </label>
-
 
         <label htmlFor={fieldId("framework-library")} className="field-shell">
           {renderInfoLabel("Framework library", "Defaults to the current runtime library for the selected model type.")}
@@ -1235,136 +1982,6 @@ export function ModelUploadWizard({
             placeholder="fasttext-wiki-news-subwords-300"
           />
         </label>
-        </div>
-      </details>
-    </div>
-  );
-
-  const renderRuntimeSection = () => (
-    <div className="model-upload-sheet__section">
-      <div className="panel__eyebrow">Runtime & Labels</div>
-      <div className="model-upload-sheet__subsection">
-        <div className="model-upload-sheet__subsection-header">
-          <strong>Required</strong>
-        </div>
-        <div className="model-upload-sheet__grid">
-        <label
-          htmlFor={fieldId("runtime-max-sequence-length")}
-          className={`field-shell${fieldErrorFor(state, "runtime_max_sequence_length") ? " field-shell--error" : ""}`}
-        >
-          {renderInfoLabel("Max sequence length", "Used during tokenization to truncate or pad input")}
-          <input
-            id={fieldId("runtime-max-sequence-length")}
-            type="number"
-            min={1}
-            value={state.metadata.runtime_max_sequence_length}
-            onChange={(event) =>
-              dispatch({
-                type: "set-metadata",
-                key: "runtime_max_sequence_length",
-                value: Number(event.target.value),
-              })
-            }
-          />
-          {fieldErrorFor(state, "runtime_max_sequence_length") ? (
-            <small>{fieldErrorFor(state, "runtime_max_sequence_length")}</small>
-          ) : null}
-        </label>
-
-        <label
-          htmlFor={fieldId("runtime-batch-size")}
-          className={`field-shell${fieldErrorFor(state, "runtime_batch_size") ? " field-shell--error" : ""}`}
-        >
-          {renderInfoLabel("Batch size", "Reserved for future functionality")}
-          <input
-            id={fieldId("runtime-batch-size")}
-            type="number"
-            min={1}
-            value={state.metadata.runtime_batch_size}
-            onChange={(event) =>
-              dispatch({
-                type: "set-metadata",
-                key: "runtime_batch_size",
-                value: Number(event.target.value),
-              })
-            }
-          />
-          {fieldErrorFor(state, "runtime_batch_size") ? <small>{fieldErrorFor(state, "runtime_batch_size")}</small> : null}
-        </label>
-
-        <div className={`field-shell field-shell--wide${fieldErrorFor(state, "labels") ? " field-shell--error" : ""}`}>
-          {renderInfoLabel(
-            "Labels",
-            "HF preflight can replace the placeholder labels when remote metadata exposes a label map.",
-          )}
-          <div className="label-editor">
-            {state.metadata.labels.map((label, index) => (
-              <div key={`${label.id}-${index}`} className="label-editor__row">
-                <div className="model-upload-sheet__input-stack">
-                  <input
-                    type="number"
-                    value={label.id}
-                    onChange={(event) =>
-                      dispatch({
-                        type: "update-label",
-                        index,
-                        patch: { id: Number(event.target.value) },
-                      })
-                    }
-                  />
-                  {fieldErrorFor(state, `label-id-${index}`) ? (
-                    <small className="field-error">{fieldErrorFor(state, `label-id-${index}`)}</small>
-                  ) : null}
-                </div>
-                <div className="model-upload-sheet__input-stack">
-                  <input
-                    value={label.name}
-                    onChange={(event) =>
-                      dispatch({
-                        type: "update-label",
-                        index,
-                        patch: { name: event.target.value },
-                      })
-                    }
-                    placeholder="label_name"
-                  />
-                  {fieldErrorFor(state, `label-name-${index}`) ? (
-                    <small className="field-error">{fieldErrorFor(state, `label-name-${index}`)}</small>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  className="mini-button"
-                  onClick={() => dispatch({ type: "remove-label", index })}
-                  disabled={state.metadata.labels.length === 1}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="label-editor__actions">
-            <button type="button" className="mini-button" onClick={() => dispatch({ type: "add-label" })}>
-              Add label
-            </button>
-            {fieldErrorFor(state, "labels") ? <span>{fieldErrorFor(state, "labels")}</span> : null}
-          </div>
-        </div>
-        </div>
-      </div>
-
-      <details
-        className="model-upload-sheet__subsection model-upload-sheet__subsection--collapsible"
-        open={optionalRuntimeOpen}
-        onToggle={(event) => setOptionalRuntimeOpen((event.currentTarget as HTMLDetailsElement).open)}
-      >
-        <summary className="model-upload-sheet__subsection-summary">
-          <span className="model-upload-sheet__subsection-header">
-            <strong>Optional</strong>
-          </span>
-          <span className="model-upload-sheet__subsection-chevron" aria-hidden="true" />
-        </summary>
-        <div className="model-upload-sheet__grid">
 
         <label htmlFor={fieldId("runtime-device")} className="field-shell">
           {renderInfoLabel("Runtime device", "Matches the existing manifest structure used in the registry.")}
@@ -1486,71 +2103,159 @@ export function ModelUploadWizard({
     </div>
   );
 
-  const renderDetailsStep = () => (
-    <div className="model-upload-sheet__content">
-      {renderDomainSection()}
-      {renderMetadataSection()}
-      {renderRuntimeSection()}
+  const renderRegistrationConfigSection = () => (
+    <div className="model-upload-sheet__section">
+      <div className="panel__eyebrow">Config Upload</div>
+
+      <label
+        htmlFor={fieldId("registration-config")}
+        className={`field-shell${fieldErrorFor(state, "registration_config") ? " field-shell--error" : ""}`}
+      >
+        <span>Registration config file</span>
+        <input
+          id={fieldId("registration-config")}
+          aria-label="Registration config file"
+          type="file"
+          accept=".yaml,.yml,.json"
+          multiple={false}
+          onChange={(event) =>
+            void handleRegistrationConfigFilesChange(Array.from(event.target.files ?? []))
+          }
+        />
+        <small>
+          {fieldErrorFor(state, "registration_config")
+            ?? "Upload the saved manifest you already have (YAML or JSON). We’ll use it to drive the remaining upload flow."}
+        </small>
+        <div className="artifact-slot__list">
+          {state.registrationConfigFiles.length > 0 ? (
+            state.registrationConfigFiles.map((file) => <span key={file.name}>{file.name}</span>)
+          ) : (
+            <span>No config file selected.</span>
+          )}
+        </div>
+      </label>
+
+      <details className="model-upload-sheet__example-config">
+        <summary>View config example</summary>
+        <pre>{exampleConfigTemplate(currentFramework)}</pre>
+      </details>
     </div>
   );
 
+  const renderLocalConfigQuestionSection = () => (
+    <div className="model-upload-sheet__section model-upload-sheet__section--source">
+      <h3 className="model-upload-sheet__source-question">
+        Do you already have a ready upload config file?
+      </h3>
+      <div className="model-upload-sheet__choice-grid model-upload-sheet__choice-grid--source">
+        <button
+          type="button"
+          className="model-upload-sheet__choice model-upload-sheet__choice--source"
+          onClick={() => handleLocalConfigModeSelection("uploaded-config")}
+          data-testid="local-config-mode-uploaded"
+        >
+          <strong>Yes</strong>
+          <span
+            className="model-upload-sheet__choice-icon-shell model-upload-sheet__choice-icon-shell--config-ready"
+            aria-hidden="true"
+          >
+            <ReadyConfigIcon />
+          </span>
+        </button>
+        <button
+          type="button"
+          className="model-upload-sheet__choice model-upload-sheet__choice--source"
+          onClick={() => handleLocalConfigModeSelection("manual-metadata")}
+          data-testid="local-config-mode-manual"
+        >
+          <strong>No</strong>
+          <span
+            className="model-upload-sheet__choice-icon-shell model-upload-sheet__choice-icon-shell--manual-entry"
+            aria-hidden="true"
+          >
+            <ManualMetadataIcon />
+          </span>
+        </button>
+      </div>
+      {fieldErrorFor(state, "local_config_mode") ? (
+        <small className="field-error">{fieldErrorFor(state, "local_config_mode")}</small>
+      ) : null}
+    </div>
+  );
+
+  const renderDetailsStep = () => {
+    const detailsContentClassName =
+      branch === "local" && state.localDetailsStage === "question"
+        ? "model-upload-sheet__content model-upload-sheet__content--source"
+        : "model-upload-sheet__content model-upload-sheet__content--details";
+
+    if (branch === "local") {
+      if (state.localDetailsStage === "question") {
+        return (
+          <div className={detailsContentClassName}>
+            {renderLocalConfigQuestionSection()}
+          </div>
+        );
+      }
+
+      return (
+        <div className={detailsContentClassName}>
+          {state.localConfigMode === "uploaded-config" ? renderRegistrationConfigSection() : null}
+          {state.localConfigMode === "manual-metadata" ? (
+            <>
+              {renderDomainSection()}
+              {renderMetadataSection()}
+              {renderLabelsSection()}
+              {renderOptionalDetailsSection()}
+            </>
+          ) : null}
+        </div>
+      );
+    }
+
+    return (
+      <div className={detailsContentClassName}>
+        {renderDomainSection()}
+        {renderMetadataSection()}
+        {renderLabelsSection()}
+        {renderOptionalDetailsSection()}
+      </div>
+    );
+  };
+
+  const renderArtifactUploadState = (fileCount: number, emptyLabel: string) =>
+    fileCount === 0 ? (
+      <div className="artifact-slot__upload-state-row">
+        <span className="artifact-slot__upload-state">{emptyLabel}</span>
+      </div>
+    ) : null;
+
   const renderLocalValidateStep = () => {
-    const requirements = ARTIFACT_REQUIREMENTS[currentFramework];
     return (
       <div className="model-upload-sheet__content">
-        <div className="model-upload-sheet__section">
-          <div className="panel__eyebrow">Registration Config</div>
-
-          <label
-            htmlFor={fieldId("registration-config")}
-            className={`field-shell${fieldErrorFor(state, "registration_config") ? " field-shell--error" : ""}`}
-          >
-            <span>Registration config file</span>
-            <input
-              id={fieldId("registration-config")}
-              aria-label="Registration config file"
-              type="file"
-              accept=".yaml,.yml,.json"
-              multiple={false}
-              onChange={(event) =>
-                dispatch({
-                  type: "set-registration-config-files",
-                  files: Array.from(event.target.files ?? []),
-                })
-              }
-            />
-            <small>
-              {fieldErrorFor(state, "registration_config")
-                ?? "Optional. Upload the main saved manifest you already have (YAML or JSON), or skip this and we’ll generate one."}
-            </small>
-            <div className="artifact-slot__list">
-              {state.registrationConfigFiles.length > 0 ? (
-                state.registrationConfigFiles.map((file) => <span key={file.name}>{file.name}</span>)
-              ) : (
-                <span>No config file selected.</span>
-              )}
-            </div>
-          </label>
-
-          <details className="model-upload-sheet__example-config">
-            <summary>Example config</summary>
-            <pre>{exampleConfigTemplate(currentFramework)}</pre>
-          </details>
-        </div>
-
-        <div className="model-upload-sheet__section">
-          <div className="panel__eyebrow">Artifacts</div>
-          <div className="model-upload-sheet__grid">
-            {requirements.map((requirement) => {
+        <div className="model-upload-sheet__section model-upload-sheet__section--artifacts">
+          <div className="model-upload-sheet__grid model-upload-sheet__artifact-grid">
+            {visibleArtifactRequirements.map((requirement) => {
               const files = state.artifactFiles[requirement.slot] ?? [];
+              const artifactError = fieldErrorFor(state, `artifacts.${requirement.slot}`);
+              const visualKind = resolveArtifactVisualKind(requirement.slot);
               return (
                 <label
                   key={requirement.slot}
                   htmlFor={fieldId(`artifact-${requirement.slot}`)}
-                  className={`artifact-slot${fieldErrorFor(state, `artifacts.${requirement.slot}`) ? " artifact-slot--error" : ""}`}
+                  className={`artifact-slot artifact-slot--compact${
+                    artifactError ? " artifact-slot--error" : ""
+                  }`}
                 >
                   <div className="artifact-slot__header">
-                    <strong>{requirement.title}</strong>
+                    <div className="artifact-slot__header-main">
+                      <span
+                        className={`artifact-slot__icon-shell artifact-slot__icon-shell--${visualKind}`}
+                      >
+                        <ArtifactCardIcon kind={visualKind} />
+                      </span>
+                      <strong>{requirement.title}</strong>
+                    </div>
                     <span>{requirement.required ? "Required" : "Optional"}</span>
                   </div>
                   <p>{requirement.hint}</p>
@@ -1568,77 +2273,73 @@ export function ModelUploadWizard({
                       })
                     }
                   />
-                  <small>{fieldErrorFor(state, `artifacts.${requirement.slot}`)}</small>
-                  <div className="artifact-slot__list">
-                    {files.length > 0 ? (
-                      files.map((file) => <span key={`${requirement.slot}-${file.name}`}>{file.name}</span>)
-                    ) : (
-                      <span>No files selected.</span>
-                    )}
-                  </div>
+                  {renderArtifactUploadState(files.length, "No files uploaded yet")}
+                  {files.length > 0 ? (
+                    <div className="artifact-slot__list artifact-slot__list--selected">
+                      {files.map((file) => (
+                        <span key={`${requirement.slot}-${file.name}`}>{file.name}</span>
+                      ))}
+                    </div>
+                  ) : null}
                 </label>
               );
             })}
-          </div>
-        </div>
-
-        <div className="model-upload-sheet__section">
-          <div className="panel__eyebrow">Optional Dashboard</div>
-          <label
-            htmlFor={fieldId("dashboard-bundle")}
-            className={`field-shell${fieldErrorFor(state, "dashboard") ? " field-shell--error" : ""}`}
-          >
-            <span>Dashboard bundle</span>
-            <input
-              id={fieldId("dashboard-bundle")}
-              aria-label="Dashboard bundle"
-              ref={(input) => {
-                if (!input) {
-                  return;
-                }
-                input.setAttribute("webkitdirectory", "");
-                input.setAttribute("directory", "");
-              }}
-              type="file"
-              multiple
-              onChange={(event) =>
-                dispatch({
-                  type: "set-dashboard-files",
-                  files: Array.from(event.target.files ?? []),
-                })
-              }
-            />
-            <small>{fieldErrorFor(state, "dashboard") ?? "Optional. If attached, the bundle must include dashboard-manifest.json."}</small>
-            <div className="artifact-slot__list">
-              {state.dashboardFiles.length > 0 ? (
-                state.dashboardFiles.slice(0, 6).map((file) => (
-                  <span key={normalizeDashboardRelativePath(file)}>
-                    {normalizeDashboardRelativePath(file)}
+            {(() => {
+              const dashboardError = fieldErrorFor(state, "dashboard");
+              return (
+            <label
+              htmlFor={fieldId("dashboard-bundle")}
+              className={`artifact-slot artifact-slot--compact${
+                dashboardError ? " artifact-slot--error" : ""
+              }`}
+            >
+              <div className="artifact-slot__header">
+                <div className="artifact-slot__header-main">
+                  <span className="artifact-slot__icon-shell artifact-slot__icon-shell--dashboard">
+                    <ArtifactCardIcon kind="dashboard" />
                   </span>
-                ))
-              ) : (
-                <span>No dashboard bundle selected.</span>
-              )}
-            </div>
-          </label>
-        </div>
-
-        {isLocalPreflight(state.preflight) ? (
-          <div className="model-upload-sheet__section" data-testid="local-preflight-summary">
-            <div className="panel__eyebrow">Validation Result</div>
-            <div className="upload-review">
-              {state.preflight.artifact_checks.map((check) => (
-                <div key={check.slot} className="upload-review__item">
-                  <strong>{check.title}</strong>
-                  <span className={`status-chip status-chip--${check.valid ? "ready" : "missing"}`}>
-                    {check.valid ? "valid" : "needs attention"}
-                  </span>
-                  <p>{check.message ?? "Looks good."}</p>
+                  <strong>Dashboard Bundle</strong>
                 </div>
-              ))}
-            </div>
+                <span>Optional</span>
+              </div>
+              <p>e.g. dashboard-manifest.json, index.html</p>
+              <input
+                id={fieldId("dashboard-bundle")}
+                aria-label="Dashboard bundle"
+                ref={(input) => {
+                  if (!input) {
+                    return;
+                  }
+                  input.setAttribute("webkitdirectory", "");
+                  input.setAttribute("directory", "");
+                }}
+                type="file"
+                multiple
+                onChange={(event) =>
+                  dispatch({
+                    type: "set-dashboard-files",
+                    files: Array.from(event.target.files ?? []),
+                  })
+                }
+              />
+              {renderArtifactUploadState(
+                state.dashboardFiles.length,
+                "No dashboard bundle uploaded yet",
+              )}
+              {state.dashboardFiles.length > 0 ? (
+                <div className="artifact-slot__list artifact-slot__list--selected">
+                  {state.dashboardFiles.slice(0, 6).map((file) => (
+                    <span key={normalizeDashboardRelativePath(file)}>
+                      {normalizeDashboardRelativePath(file)}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </label>
+              );
+            })()}
           </div>
-        ) : null}
+        </div>
       </div>
     );
   };
@@ -1717,7 +2418,7 @@ export function ModelUploadWizard({
 
   const renderReviewStep = () => {
     const metadata = state.preflight?.normalized_metadata ?? currentMetadata;
-    if (!metadata || !branch || !domainChoice) {
+    if (!metadata || !branch) {
       return null;
     }
 
@@ -1726,65 +2427,77 @@ export function ModelUploadWizard({
       isLocalPreflight(state.preflight) && state.preflight.config_source === "uploaded"
         ? "Uploaded by user"
         : "Generated by system";
+    const reviewCards = [
+      {
+        key: "model",
+        title: "Model",
+        accentClassName: "model-upload-sheet__review-card--model",
+        facts: [
+          { label: "Display name", value: metadata.display_name },
+          { label: "Domain", value: `${metadata.ui_display_name} (${metadata.domain})` },
+          { label: "Model id", value: metadata.model_id },
+        ],
+      },
+      {
+        key: "runtime",
+        title: "Runtime",
+        accentClassName: "model-upload-sheet__review-card--runtime",
+        facts: [
+          { label: "Model type", value: frameworkLabel(metadata.framework_type) },
+          {
+            label: "Runtime",
+            value: `${metadata.runtime_device} · max ${metadata.runtime_max_sequence_length} · batch ${metadata.runtime_batch_size}`,
+          },
+          { label: "Labels", value: `${metadata.labels.length} configured` },
+        ],
+      },
+      {
+        key: "registration",
+        title: "Registration",
+        accentClassName: "model-upload-sheet__review-card--registration",
+        facts: [
+          { label: "Source", value: state.source === "huggingface" ? "Hugging Face" : "Local computer" },
+          { label: "Upload mode", value: branchHeading(branch) },
+          { label: "Config source", value: configSourceLabel },
+        ],
+      },
+      {
+        key: "packaging",
+        title: "Packaging",
+        accentClassName: "model-upload-sheet__review-card--packaging",
+        facts: [
+          { label: "Dashboard", value: state.dashboardFiles.length > 0 ? "Attached" : "Not attached" },
+          {
+            label: branch === "huggingface" ? "Repo" : "Artifacts",
+            value:
+              branch === "huggingface"
+                ? state.hfRepoInput.trim()
+                : `${Object.values(state.artifactFiles).flat().length} files selected`,
+          },
+        ],
+      },
+    ] as const;
     return (
-      <div className="model-upload-sheet__content" data-testid="review-step">
-        <div className="model-upload-sheet__section">
-          <div className="panel__eyebrow">Review</div>
-          <div className="upload-review">
-            <div className="upload-review__item">
-              <strong>Source</strong>
-              <span>{state.source === "huggingface" ? "Hugging Face" : "Local computer"}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Upload mode</strong>
-              <span>{branchHeading(branch)}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Model type</strong>
-              <span>{frameworkLabel(metadata.framework_type)}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Domain</strong>
-              <span>
-                {metadata.ui_display_name} ({metadata.domain})
-              </span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Display name</strong>
-              <span>{metadata.display_name}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Model id</strong>
-              <span>{metadata.model_id}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Config source</strong>
-              <span>{configSourceLabel}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Runtime</strong>
-              <span>
-                {metadata.runtime_device} · max {metadata.runtime_max_sequence_length} · batch {metadata.runtime_batch_size}
-              </span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Labels</strong>
-              <span>{metadata.labels.length} configured</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Dashboard</strong>
-              <span>{state.dashboardFiles.length > 0 ? "Attached" : "Not attached"}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>{branch === "huggingface" ? "Repo" : "Artifacts"}</strong>
-              <span>
-                {branch === "huggingface"
-                  ? state.hfRepoInput.trim()
-                  : Object.values(state.artifactFiles).flat().length}{" "}
-                {branch === "huggingface" ? "" : "files selected"}
-              </span>
-            </div>
-          </div>
+      <div className="model-upload-sheet__content model-upload-sheet__content--review" data-testid="review-step">
+        <div className="model-upload-sheet__review-grid">
+          {reviewCards.map((card) => (
+            <section
+              key={card.key}
+              className={`model-upload-sheet__review-card ${card.accentClassName}`}
+            >
+              <div className="model-upload-sheet__review-card-header">
+                <span className="model-upload-sheet__review-card-kicker">{card.title}</span>
+              </div>
+              <div className="model-upload-sheet__review-facts">
+                {card.facts.map((fact) => (
+                  <div key={`${card.key}-${fact.label}`} className="model-upload-sheet__review-fact">
+                    <span>{fact.label}</span>
+                    <strong>{fact.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
 
         {warnings.length > 0 ? (
@@ -1793,49 +2506,26 @@ export function ModelUploadWizard({
           </div>
         ) : null}
 
-        <div className="model-upload-sheet__section">
-          <div className="panel__eyebrow">Saved Config Preview</div>
-          <details className="model-upload-sheet__example-config" open>
-            <summary>View generated / normalized config</summary>
-            <pre>{state.preflight?.config_preview}</pre>
-          </details>
-        </div>
+        <section
+          className="model-upload-sheet__example-config model-upload-sheet__example-config--review"
+          data-testid="review-config-preview"
+        >
+          <button
+            type="button"
+            className="model-upload-sheet__example-config-toggle model-upload-sheet__example-config-toggle--dialog"
+            aria-haspopup="dialog"
+            aria-expanded={reviewConfigOpen}
+            onClick={() => setReviewConfigOpen(true)}
+          >
+            <span className="model-upload-sheet__example-config-copy">
+              <strong>Config Preview</strong>
+              <span>Open generated config</span>
+            </span>
+          </button>
+        </section>
       </div>
     );
   };
-
-  const renderProgressStep = () => (
-    <div className="model-upload-sheet__content" data-testid="progress-step">
-      <div className="model-upload-sheet__intro-card">
-        <div className="panel__eyebrow">Progress</div>
-        <h3>
-          {state.submissionStatus === "running"
-            ? branch === "huggingface"
-              ? "Importing the model"
-              : "Registering the model"
-            : "The request finished with an error"}
-        </h3>
-        <p>
-          {state.submissionStatus === "running"
-            ? "Back and close are locked until the backend returns. This avoids fake cancellation while the import is still running."
-            : state.message ?? "The request ended early. You can return to the review step and try again."}
-        </p>
-      </div>
-
-      <div className="model-upload-sheet__progress-list">
-        {progressStages(branch).map((stage, index) => (
-          <div key={stage} className="upload-review__item">
-            <strong>{index + 1}</strong>
-            <p>{stage}</p>
-          </div>
-        ))}
-      </div>
-
-      {state.submissionStatus === "error" ? (
-        <div className="inline-alert">{state.message}</div>
-      ) : null}
-    </div>
-  );
 
   const renderResultStep = () => {
     if (!state.result) {
@@ -1843,41 +2533,16 @@ export function ModelUploadWizard({
     }
     const { result } = state.result;
     return (
-      <div className="model-upload-sheet__content" data-testid="result-step">
-        <div className="model-upload-sheet__intro-card">
-          <div className="panel__eyebrow">Result</div>
-          <h3>{result.display_name} is registered</h3>
-          <p>The catalog has already been refreshed behind the modal, so the model is ready to inspect in Model Management.</p>
-        </div>
-
-        <div className="upload-review">
-          <div className="upload-review__item">
-            <strong>Model id</strong>
-            <span>{result.model_id}</span>
+      <div className="model-upload-sheet__content model-upload-sheet__content--result" data-testid="result-step">
+        <section className="model-upload-sheet__success-card">
+          <span className="model-upload-sheet__success-icon-shell" aria-hidden="true">
+            <UploadSuccessIcon />
+          </span>
+          <div className="model-upload-sheet__success-copy">
+            <h3>Model uploaded successfully</h3>
+            <p>{result.display_name} was uploaded successfully and is now available in Model Management.</p>
           </div>
-          <div className="upload-review__item">
-            <strong>Domain</strong>
-            <span>{result.domain}</span>
-          </div>
-          <div className="upload-review__item">
-            <strong>Active</strong>
-            <span>{result.is_active ? "Yes" : "No"}</span>
-          </div>
-          <div className="upload-review__item">
-            <strong>Runtime status</strong>
-            <span>{result.status}</span>
-          </div>
-          <div className="upload-review__item">
-            <strong>Dashboard</strong>
-            <span>{result.dashboard_status}</span>
-          </div>
-          <div className="upload-review__item">
-            <strong>Config source</strong>
-            <span>{result.config_source === "uploaded" ? "Uploaded by user" : "Generated by system"}</span>
-          </div>
-        </div>
-
-        {result.warnings.length > 0 ? <div className="inline-alert">{result.warnings.join(" ")}</div> : null}
+        </section>
       </div>
     );
   };
@@ -1895,29 +2560,26 @@ export function ModelUploadWizard({
     if (state.step === "review") {
       return renderReviewStep();
     }
-    if (state.step === "progress") {
-      return renderProgressStep();
-    }
     return renderResultStep();
   };
 
   const renderFooter = () => {
     if (state.step === "source") {
-      return (
-        <>
-          <button type="button" className="mini-button" onClick={closeWizard}>
-            Cancel
-          </button>
-          <button type="button" className="primary-button" onClick={handleSourceNext}>
-            Continue
-          </button>
-        </>
-      );
+      return null;
     }
     if (state.step === "details") {
+      if (branch === "local" && state.localDetailsStage === "question") {
+        return (
+          <>
+            <button type="button" className="mini-button" onClick={handleDetailsBack}>
+              Back
+            </button>
+          </>
+        );
+      }
       return (
         <>
-          <button type="button" className="mini-button" onClick={() => dispatch({ type: "set-step", step: "source" })}>
+          <button type="button" className="mini-button" onClick={handleDetailsBack}>
             Back
           </button>
           <button type="button" className="primary-button" onClick={handleDetailsNext}>
@@ -1929,29 +2591,51 @@ export function ModelUploadWizard({
     if (state.step === "validate") {
       return (
         <>
+          {validateStatus ? (
+            <div
+              className={`model-upload__status model-upload__status--${validateStatus.tone}${
+                validateStatus.detail ? "" : " model-upload__status--compact"
+              }`}
+              data-testid="validate-status"
+              role={validateStatus.tone === "error" ? "alert" : "status"}
+              aria-live="polite"
+            >
+              <span className="model-upload__status-indicator" aria-hidden="true" />
+              <div className="model-upload__status-copy">
+                <strong>{validateStatus.title}</strong>
+                {validateStatus.detail ? <span>{validateStatus.detail}</span> : null}
+              </div>
+            </div>
+          ) : null}
           <button type="button" className="mini-button" onClick={() => dispatch({ type: "set-step", step: "details" })}>
             Back
           </button>
-          {canGoToReview ? (
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => dispatch({ type: "set-step", step: "review" })}
-            >
-              Continue to review
-            </button>
-          ) : (
-            <button type="button" className="primary-button" onClick={() => void handleRunValidation()}>
-              {branch === "huggingface" ? "Run preflight" : "Validate files"}
-            </button>
-          )}
+          <button type="button" className="primary-button" onClick={() => void handleRunValidation()}>
+            {branch === "huggingface" ? "Run preflight" : "Validate files"}
+          </button>
         </>
       );
     }
     if (state.step === "review") {
       return (
         <>
-          <button type="button" className="mini-button" onClick={() => dispatch({ type: "set-step", step: "validate" })}>
+          {isSubmitting ? (
+            <span
+              className="model-upload__spinner-indicator"
+              data-testid="upload-running-indicator"
+              role="status"
+              aria-live="polite"
+              aria-label={branch === "huggingface" ? "Importing model" : "Uploading model"}
+            >
+              <span className="model-upload__spinner-dot" aria-hidden="true" />
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className="mini-button"
+            onClick={() => dispatch({ type: "set-step", step: "validate" })}
+            disabled={isSubmitting}
+          >
             Back
           </button>
           <button
@@ -1959,22 +2643,16 @@ export function ModelUploadWizard({
             className="primary-button"
             onClick={() => void handleSubmit()}
             data-testid="review-submit"
+            disabled={isSubmitting}
           >
-            {branch === "huggingface" ? "Import model" : "Upload model"}
+            {isSubmitting
+              ? branch === "huggingface"
+                ? "Importing..."
+                : "Uploading..."
+              : branch === "huggingface"
+                ? "Import model"
+                : "Upload model"}
           </button>
-        </>
-      );
-    }
-    if (state.step === "progress") {
-      return state.submissionStatus === "error" ? (
-        <>
-          <button type="button" className="mini-button" onClick={() => dispatch({ type: "set-step", step: "review" })}>
-            Back to review
-          </button>
-        </>
-      ) : (
-        <>
-          <span className="dashboard-mini-chip">Request in progress</span>
         </>
       );
     }
@@ -1992,6 +2670,10 @@ export function ModelUploadWizard({
     );
   };
 
+  const footerContent = renderFooter();
+  const hasFloatingFooter =
+    state.step === "details" && branch === "local" && state.localDetailsStage === "question";
+
   return (
     <div className="model-upload-sheet__overlay" onClick={closeWizard}>
       <section
@@ -2008,11 +2690,10 @@ export function ModelUploadWizard({
           <div className="model-upload-sheet__stepper">
             {STEP_DEFS.map((step, index) => {
               const isActive = step.id === state.step;
-              const isComplete = currentStepIndex > index;
               return (
                 <div
                   key={step.id}
-                  className={`model-upload-sheet__step${isActive ? " model-upload-sheet__step--active" : ""}${isComplete ? " model-upload-sheet__step--complete" : ""}`}
+                  className={`model-upload-sheet__step${isActive ? " model-upload-sheet__step--active" : ""}`}
                 >
                   <span>{String(index + 1).padStart(2, "0")}</span>
                   <strong>{step.label}</strong>
@@ -2022,7 +2703,7 @@ export function ModelUploadWizard({
           </div>
         </aside>
 
-        <div className="model-upload-sheet__main">
+        <div ref={mainPanelRef} className="model-upload-sheet__main">
           <header className="model-upload-sheet__header">
             <div>
               {state.step === "details" || state.step === "source" ? null : (
@@ -2040,9 +2721,53 @@ export function ModelUploadWizard({
 
           {renderBody()}
 
-          <footer className="model-upload__actions">{renderFooter()}</footer>
+          {footerContent ? (
+            <footer
+              className={`model-upload__actions${
+                hasFloatingFooter ? " model-upload__actions--floating" : ""
+              }`}
+            >
+              {footerContent}
+            </footer>
+          ) : null}
         </div>
       </section>
+      {reviewConfigOpen ? (
+        <div
+          className="artifact-modal model-upload-sheet__config-modal-overlay"
+          data-testid="review-config-modal"
+          onClick={(event) => {
+            event.stopPropagation();
+            setReviewConfigOpen(false);
+          }}
+        >
+          <div
+            className="artifact-modal__card model-info-modal model-upload-sheet__config-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={fieldId("review-config-modal-title")}
+            aria-describedby={fieldId("review-config-modal-body")}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="artifact-modal__header">
+              <h3 id={fieldId("review-config-modal-title")}>Config Preview</h3>
+              <button
+                type="button"
+                className="mini-button"
+                onClick={() => setReviewConfigOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <pre
+              id={fieldId("review-config-modal-body")}
+              className="model-upload-sheet__config-modal-body"
+            >
+              {state.preflight?.config_preview}
+            </pre>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

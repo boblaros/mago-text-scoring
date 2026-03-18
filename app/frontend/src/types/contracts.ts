@@ -209,7 +209,7 @@ export interface ArtifactValidationSummary {
 }
 
 export interface LocalUploadPreflightRequest {
-  metadata: UploadModelMetadata;
+  metadata?: UploadModelMetadata | null;
   artifact_manifest: Record<string, UploadFileDescriptor[]>;
   dashboard_manifest: UploadFileDescriptor[];
 }

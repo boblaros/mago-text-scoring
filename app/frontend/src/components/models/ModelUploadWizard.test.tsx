@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -194,7 +194,7 @@ function renderWizard() {
 
 async function advanceToLocalValidate(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByTestId("upload-source-local"));
-  await user.click(screen.getByRole("button", { name: "Continue" }));
+  await user.click(screen.getByTestId("local-config-mode-manual"));
   await user.type(screen.getByLabelText("Display name"), "Sentiment Demo");
   await user.type(screen.getByLabelText("Model id"), "sentiment-demo");
   await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -218,10 +218,87 @@ describe("ModelUploadWizard", () => {
     const { user } = renderWizard();
 
     await user.click(screen.getByTestId("upload-source-local"));
-    await user.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(screen.getAllByText("Local upload").length).toBeGreaterThan(0);
+    expect(screen.getByText("Do you already have a ready upload config file?")).toBeInTheDocument();
+    expect(screen.getByText("Model Name & Task")).toBeInTheDocument();
+    expect(screen.getByText("Model Artifacts")).toBeInTheDocument();
+  });
+
+  it("keeps the local config question footer out of the main layout flow", async () => {
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+
+    expect(screen.getByRole("button", { name: "Back" }).closest("footer")).toHaveClass(
+      "model-upload__actions--floating",
+    );
+  });
+
+  it("advances immediately after choosing a source", async () => {
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+    expect(screen.getByText("Do you already have a ready upload config file?")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByTestId("upload-source-local")).not.toHaveClass("model-upload-sheet__choice--active");
+    expect(screen.getByTestId("upload-source-hf")).not.toHaveClass("model-upload-sheet__choice--active");
+    expect(screen.getByTestId("upload-source-hf")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("upload-source-hf"));
+    expect(screen.getByLabelText("Display name")).toBeInTheDocument();
+  });
+
+  it("keeps completed sidebar steps visually neutral", async () => {
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+
+    expect(screen.getByText("Source", { selector: "strong" }).closest("div")).not.toHaveClass(
+      "model-upload-sheet__step--complete",
+    );
+    expect(
+      screen.getByText("Model Name & Task", { selector: "strong" }).closest("div"),
+    ).toHaveClass("model-upload-sheet__step--active");
+  });
+
+  it("hides the local follow-up question after choosing a branch", async () => {
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+    const uploadedChoice = screen.getByTestId("local-config-mode-uploaded");
+    await user.click(uploadedChoice);
+
+    expect(screen.queryByText("Do you already have a ready upload config file?")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Registration config file")).toBeInTheDocument();
+    expect(screen.getByText("View config example")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByTestId("upload-source-local"));
+    await user.click(screen.getByTestId("local-config-mode-manual"));
+
+    expect(screen.queryByText("Do you already have a ready upload config file?")).not.toBeInTheDocument();
     expect(screen.getByText("Select existing domain")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Registration config file")).not.toBeInTheDocument();
+  });
+
+  it("uses the standard details layout after the local branch selection", async () => {
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+    await user.click(screen.getByTestId("local-config-mode-manual"));
+
+    expect(document.querySelector(".model-upload-sheet__content--details")).not.toBeNull();
+    expect(document.querySelector(".model-upload-sheet__content--details-local")).toBeNull();
+  });
+
+  it("renders the labels section with a single visible section title", async () => {
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+    await user.click(screen.getByTestId("local-config-mode-manual"));
+
+    expect(screen.getAllByText("Labels")).toHaveLength(1);
   });
 
   it("runs local validation and reaches the review step", async () => {
@@ -235,13 +312,221 @@ describe("ModelUploadWizard", () => {
     await waitFor(() =>
       expect(mockedPreflightLocalUpload).toHaveBeenCalledTimes(1),
     );
-    expect(screen.getByTestId("local-preflight-summary")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Continue to review" }));
-
-    expect(screen.getByTestId("review-step")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("review-step")).toBeInTheDocument());
+    expect(screen.queryByTestId("validate-status")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("review-step")).queryByText("Review")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("review-config-modal")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /config preview/i })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
     expect(screen.getByText("Generated by system")).toBeInTheDocument();
     expect(screen.getByText("Sentiment Demo")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /config preview/i }));
+
+    expect(screen.getByTestId("review-config-modal")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /config preview/i })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByText(/model_id: sentiment-demo/i)).toBeInTheDocument();
+
+    await user.click(within(screen.getByTestId("review-config-modal")).getByRole("button", { name: "Close" }));
+
+    expect(screen.queryByTestId("review-config-modal")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /config preview/i })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("does not show a pending validation indicator while local validation is running", async () => {
+    let resolvePreflight: (value: LocalUploadPreflightResponse) => void = () => undefined;
+    mockedPreflightLocalUpload.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePreflight = resolve;
+      }),
+    );
+    const { user } = renderWizard();
+
+    await advanceToLocalValidate(user);
+    await fillLocalFiles(user);
+    await user.click(screen.getByRole("button", { name: "Validate files" }));
+
+    expect(screen.queryByTestId("validate-status")).not.toBeInTheDocument();
+
+    resolvePreflight(buildLocalPreflightResponse());
+    await waitFor(() => expect(screen.getByTestId("review-step")).toBeInTheDocument());
+  });
+
+  it("highlights every missing required artifact card when validating empty local uploads", async () => {
+    const { user } = renderWizard();
+
+    await advanceToLocalValidate(user);
+    await user.click(screen.getByRole("button", { name: "Validate files" }));
+
+    expect(mockedPreflightLocalUpload).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Weights").closest("label")).toHaveClass("artifact-slot--error");
+    expect(screen.getByLabelText("Tokenizer Assets").closest("label")).toHaveClass("artifact-slot--error");
+    expect(screen.getByLabelText("Runtime Config Assets").closest("label")).toHaveClass("artifact-slot--error");
+    expect(screen.getByLabelText("Dashboard bundle").closest("label")).not.toHaveClass("artifact-slot--error");
+    expect(screen.getByTestId("validate-status")).toHaveClass("model-upload__status--error");
+    expect(screen.getByTestId("validate-status")).toHaveTextContent("Validation failed");
+    expect(screen.getByTestId("validate-status")).not.toHaveTextContent("Weights requires at least 1 file.");
+    expect(screen.queryByText("No files selected.")).not.toBeInTheDocument();
+  });
+
+  it("shows clear uploaded file indicators inside artifact cards", async () => {
+    const { user } = renderWizard();
+
+    await advanceToLocalValidate(user);
+    await fillLocalFiles(user);
+
+    expect(screen.queryByText("1 file uploaded")).not.toBeInTheDocument();
+    expect(screen.getByText("model.safetensors")).toBeInTheDocument();
+    expect(screen.getByText("tokenizer.json")).toBeInTheDocument();
+    expect(screen.getByText("config.json")).toBeInTheDocument();
+    expect(screen.getByText("No dashboard bundle uploaded yet")).toBeInTheDocument();
+  });
+
+  it("removes empty placeholder file lines from artifact cards", async () => {
+    const { user } = renderWizard();
+
+    await advanceToLocalValidate(user);
+
+    expect(screen.queryByText("No files selected.")).not.toBeInTheDocument();
+    expect(screen.queryByText("No dashboard bundle selected.")).not.toBeInTheDocument();
+    expect(screen.getAllByText("No files uploaded yet")).toHaveLength(3);
+  });
+
+  it("resets the wizard scroll position when moving to model artifacts upload", async () => {
+    const scrollToSpy = vi.fn();
+    const originalScrollTo = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollTo");
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollToSpy,
+    });
+
+    try {
+      const { user } = renderWizard();
+
+      await user.click(screen.getByTestId("upload-source-local"));
+      await user.click(screen.getByTestId("local-config-mode-manual"));
+      await user.type(screen.getByLabelText("Display name"), "Sentiment Demo");
+      await user.type(screen.getByLabelText("Model id"), "sentiment-demo");
+
+      scrollToSpy.mockClear();
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+
+      await waitFor(() => expect(screen.getByLabelText("Weights")).toBeInTheDocument());
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: "auto" });
+    } finally {
+      if (originalScrollTo) {
+        Object.defineProperty(HTMLElement.prototype, "scrollTo", originalScrollTo);
+      } else {
+        delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo;
+      }
+    }
+  });
+
+  it("uses the typed label name as the default display name during local preflight", async () => {
+    mockedPreflightLocalUpload.mockResolvedValue(buildLocalPreflightResponse());
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+    await user.click(screen.getByTestId("local-config-mode-manual"));
+    await user.type(screen.getByLabelText("Display name"), "Sentiment Demo");
+    await user.type(screen.getByLabelText("Model id"), "sentiment-demo");
+    const labelNameInput = screen.getByDisplayValue("class_0");
+    await user.clear(labelNameInput);
+    await user.type(labelNameInput, "Negative");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await fillLocalFiles(user);
+    await user.click(screen.getByRole("button", { name: "Validate files" }));
+
+    await waitFor(() => expect(mockedPreflightLocalUpload).toHaveBeenCalledTimes(1));
+
+    const formData = mockedPreflightLocalUpload.mock.calls[0]?.[0];
+    expect(formData).toBeInstanceOf(FormData);
+
+    const payload = JSON.parse(String((formData as FormData).get("payload"))) as {
+      metadata: UploadModelMetadata;
+    };
+    expect(payload.metadata.labels[0]).toMatchObject({
+      id: 0,
+      name: "Negative",
+      display_name: "Negative",
+    });
+  });
+
+  it("can prefill labels from a label map file before model artifacts upload", async () => {
+    mockedPreflightLocalUpload.mockResolvedValue(buildLocalPreflightResponse());
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+    await user.click(screen.getByTestId("local-config-mode-manual"));
+    await user.type(screen.getByLabelText("Display name"), "Sentiment Demo");
+    await user.type(screen.getByLabelText("Model id"), "sentiment-demo");
+    await user.click(screen.getByTestId("label-input-mode-file"));
+    await user.upload(
+      screen.getByLabelText("Label map file"),
+      new File(
+        [JSON.stringify({ 0: "Negative", 1: "Positive" })],
+        "label_mapping.json",
+        { type: "application/json" },
+      ),
+    );
+
+    await waitFor(() => expect(screen.getByText("Negative")).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.queryByText("Label Map")).not.toBeInTheDocument();
+    expect(screen.queryByText("Label Classes")).not.toBeInTheDocument();
+    expect(screen.getByText("Dashboard Bundle")).toBeInTheDocument();
+
+    await fillLocalFiles(user);
+    await user.click(screen.getByRole("button", { name: "Validate files" }));
+
+    await waitFor(() => expect(mockedPreflightLocalUpload).toHaveBeenCalledTimes(1));
+
+    const formData = mockedPreflightLocalUpload.mock.calls[0]?.[0];
+    const payload = JSON.parse(String((formData as FormData).get("payload"))) as {
+      metadata: UploadModelMetadata;
+      artifact_manifest: Record<string, Array<{ name: string }>>;
+    };
+    expect(payload.metadata.labels).toEqual([
+      { id: 0, name: "Negative", display_name: "Negative" },
+      { id: 1, name: "Positive", display_name: "Positive" },
+    ]);
+    expect(payload.artifact_manifest.label_map_file?.[0]?.name).toBe("label_mapping.json");
+  });
+
+  it("keeps label names raw when raw numbers mode is selected", async () => {
+    mockedPreflightLocalUpload.mockResolvedValue(buildLocalPreflightResponse());
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+    await user.click(screen.getByTestId("local-config-mode-manual"));
+    await user.type(screen.getByLabelText("Display name"), "Sentiment Demo");
+    await user.type(screen.getByLabelText("Model id"), "sentiment-demo");
+    await user.click(screen.getByTestId("label-input-mode-raw"));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    await fillLocalFiles(user);
+    await user.click(screen.getByRole("button", { name: "Validate files" }));
+
+    await waitFor(() => expect(mockedPreflightLocalUpload).toHaveBeenCalledTimes(1));
+
+    const formData = mockedPreflightLocalUpload.mock.calls[0]?.[0];
+    const payload = JSON.parse(String((formData as FormData).get("payload"))) as {
+      metadata: UploadModelMetadata;
+    };
+    expect(payload.metadata.labels[0]).toEqual({
+      id: 0,
+      name: "0",
+      display_name: "0",
+    });
   });
 
   it("supports an optional uploaded config inside the unified local flow", async () => {
@@ -250,17 +535,35 @@ describe("ModelUploadWizard", () => {
     );
     const { user } = renderWizard();
 
-    await advanceToLocalValidate(user);
+    await user.click(screen.getByTestId("upload-source-local"));
+    await user.click(screen.getByTestId("local-config-mode-uploaded"));
     await user.upload(
       screen.getByLabelText("Registration config file"),
-      new File(["model_id: sentiment-demo\n"], "model-config.yaml"),
+      new File(
+        [
+          [
+            'model_id: "sentiment-demo"',
+            'domain: "sentiment"',
+            'display_name: "Sentiment Demo"',
+            "framework:",
+            '  type: "transformers"',
+            '  task: "sequence-classification"',
+            "labels:",
+            '  type: "single-label-classification"',
+            "  classes:",
+            "    - id: 0",
+            '      name: "negative"',
+          ].join("\n"),
+        ],
+        "model-config.yaml",
+      ),
     );
+    await user.click(screen.getByRole("button", { name: "Continue" }));
     await fillLocalFiles(user);
     await user.click(screen.getByRole("button", { name: "Validate files" }));
 
     await waitFor(() => expect(mockedPreflightLocalUpload).toHaveBeenCalledTimes(1));
-    await user.click(screen.getByRole("button", { name: "Continue to review" }));
-
+    await waitFor(() => expect(screen.getByTestId("review-step")).toBeInTheDocument());
     expect(screen.getByText("Uploaded by user")).toBeInTheDocument();
   });
 
@@ -272,12 +575,15 @@ describe("ModelUploadWizard", () => {
     await advanceToLocalValidate(user);
     await fillLocalFiles(user);
     await user.click(screen.getByRole("button", { name: "Validate files" }));
-    await waitFor(() => expect(mockedPreflightLocalUpload).toHaveBeenCalled());
-    await user.click(screen.getByRole("button", { name: "Continue to review" }));
+    await waitFor(() => expect(screen.getByTestId("review-step")).toBeInTheDocument());
     await user.click(screen.getByTestId("review-submit"));
 
     await waitFor(() => expect(screen.getByTestId("result-step")).toBeInTheDocument());
-    expect(screen.getByText("Sentiment Demo is registered")).toBeInTheDocument();
+    expect(screen.getByText("Model uploaded successfully")).toBeInTheDocument();
+    expect(screen.queryByText("Upload Complete")).not.toBeInTheDocument();
+    expect(screen.getByText("Results", { selector: "strong" }).closest("div")).toHaveClass(
+      "model-upload-sheet__step--active",
+    );
     expect(onSuccess).toHaveBeenCalledWith(
       buildRegistrationResponse().snapshot,
       "sentiment-demo",
@@ -296,7 +602,6 @@ describe("ModelUploadWizard", () => {
     const { user } = renderWizard();
 
     await user.click(screen.getByTestId("upload-source-hf"));
-    await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.type(screen.getByLabelText("Display name"), "HF Demo");
     await user.type(screen.getByLabelText("Model id"), "hf-demo");
     await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -323,13 +628,14 @@ describe("ModelUploadWizard", () => {
     await advanceToLocalValidate(user);
     await fillLocalFiles(user);
     await user.click(screen.getByRole("button", { name: "Validate files" }));
-    await waitFor(() => expect(mockedPreflightLocalUpload).toHaveBeenCalled());
-    await user.click(screen.getByRole("button", { name: "Continue to review" }));
+    await waitFor(() => expect(screen.getByTestId("review-step")).toBeInTheDocument());
     await user.click(screen.getByTestId("review-submit"));
 
-    expect(screen.getByTestId("progress-step")).toBeInTheDocument();
+    expect(screen.getByTestId("review-step")).toBeInTheDocument();
+    expect(screen.getByTestId("upload-running-indicator")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeDisabled();
-    expect(screen.getByText("Request in progress")).toBeInTheDocument();
+    expect(screen.getByTestId("review-submit")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
 
     resolveImport(buildRegistrationResponse());
     await waitFor(() => expect(screen.getByTestId("result-step")).toBeInTheDocument());
@@ -346,14 +652,14 @@ describe("ModelUploadWizard", () => {
     const { user } = renderWizard();
 
     await user.click(screen.getByTestId("upload-source-hf"));
-    await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.type(screen.getByLabelText("Display name"), "HF Demo");
     await user.type(screen.getByLabelText("Model id"), "hf-demo");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.type(screen.getByTestId("hf-repo-input"), "org/demo-model");
     await user.click(screen.getByRole("button", { name: "Run preflight" }));
 
-    await waitFor(() => expect(screen.getByTestId("hf-preflight-summary")).toBeInTheDocument());
-    expect(screen.getByText("ready to import")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("review-step")).toBeInTheDocument());
+    expect(screen.getByText("org/demo-model")).toBeInTheDocument();
+    expect(screen.getByText("Hugging Face")).toBeInTheDocument();
   });
 });

@@ -53,6 +53,13 @@ type MetadataRuntimeAccordionItem = {
   isLocalFiles?: boolean;
 };
 
+type DistributionTableBlock = {
+  key: string;
+  title: string;
+  eyebrow: string;
+  rows: Record<string, unknown>[];
+};
+
 const CHART_SECTION_PRIORITY: Record<string, number> = {
   benchmark: 0,
   confusion_matrix: 1,
@@ -336,6 +343,73 @@ function dedupeStrings(values: string[]) {
 
 function pluralize(count: number, singular: string) {
   return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function humanizeArtifactStem(value: string) {
+  return formatLabel(value.replace(/[-/]/g, "_"));
+}
+
+function distributionEyebrow(path: string, record: Record<string, unknown>) {
+  const firstRow = toRecordArray(record.overall)[0] ?? toRecordArray(record.splits)[0] ?? null;
+  if ((firstRow && "source_dataset" in firstRow) || path.includes("source")) {
+    return "Sources";
+  }
+  return "Classes";
+}
+
+function buildDistributionTables(documents: Record<string, unknown>): DistributionTableBlock[] {
+  return Object.entries(documents)
+    .filter(([path, value]) => path.startsWith("distributions/") && Boolean(asRecord(value)))
+    .sort(([leftPath], [rightPath]) => {
+      const rank = (path: string) => {
+        if (path.includes("class-distribution")) {
+          return 0;
+        }
+        if (path.includes("source-dataset-distribution")) {
+          return 1;
+        }
+        return 2;
+      };
+
+      return rank(leftPath) - rank(rightPath) || leftPath.localeCompare(rightPath);
+    })
+    .flatMap(([path, value]) => {
+      const record = asRecord(value);
+      if (!record) {
+        return [];
+      }
+
+      const overallRows = toRecordArray(record.overall);
+      const splitRows = toRecordArray(record.splits);
+      if (!overallRows.length && !splitRows.length) {
+        return [];
+      }
+
+      const stem = lastPathSegment(path).replace(/\.json$/i, "");
+      const titleBase = humanizeArtifactStem(stem);
+      const eyebrow = distributionEyebrow(path, record);
+      const blocks: DistributionTableBlock[] = [];
+
+      if (overallRows.length) {
+        blocks.push({
+          key: `${path}:overall`,
+          title: `${titleBase} overview`,
+          eyebrow,
+          rows: overallRows,
+        });
+      }
+
+      if (splitRows.length) {
+        blocks.push({
+          key: `${path}:splits`,
+          title: `${titleBase} by split`,
+          eyebrow,
+          rows: splitRows,
+        });
+      }
+
+      return blocks;
+    });
 }
 
 function lastPathSegment(value: string) {
@@ -949,10 +1023,6 @@ export function ModelDashboardPanel({
   const benchmarkRows = toRecordArray(findDocument(dashboard, "metrics/benchmark-test.json"));
   const crossDatasetRows = toRecordArray(findDocument(dashboard, "metrics/cross-dataset.json"));
   const learningCurves = toRecordArray(findDocument(dashboard, "curves/learning-curve.json"));
-  const classDistribution = asRecord(findDocument(dashboard, "distributions/class-distribution.json"));
-  const sourceDistribution = asRecord(
-    findDocument(dashboard, "distributions/source-dataset-distribution.json"),
-  );
   const predictionSamples = toRecordArray(findDocument(dashboard, "samples/prediction-samples.json"));
   const trainingHistory = asRecord(findDocument(dashboard, "curves/training-history.json"));
 
@@ -1279,28 +1349,10 @@ export function ModelDashboardPanel({
     },
   );
 
-  const distributionTables = [
-    {
-      title: "Class distribution overview",
-      eyebrow: "Classes",
-      rows: toRecordArray(classDistribution?.overall),
-    },
-    {
-      title: "Class distribution by split",
-      eyebrow: "Classes",
-      rows: toRecordArray(classDistribution?.splits),
-    },
-    {
-      title: "Source distribution overview",
-      eyebrow: "Sources",
-      rows: toRecordArray(sourceDistribution?.overall),
-    },
-    {
-      title: "Source distribution by split",
-      eyebrow: "Sources",
-      rows: toRecordArray(sourceDistribution?.splits),
-    },
-  ].filter((block) => block.rows.length);
+  const distributionTables = useMemo(
+    () => buildDistributionTables(dashboard.documents),
+    [dashboard.documents],
+  );
 
   const description = String(
     metadataModel?.description ??
@@ -1582,7 +1634,7 @@ export function ModelDashboardPanel({
                 <div className="models-dashboard__detail-stack">
                   {distributionTables.map((table) => (
                     <CompactTable
-                      key={table.title}
+                      key={table.key}
                       title={table.title}
                       eyebrow={table.eyebrow}
                       rows={table.rows}

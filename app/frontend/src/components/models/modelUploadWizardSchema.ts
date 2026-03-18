@@ -10,7 +10,6 @@ export type WizardStep =
   | "details"
   | "validate"
   | "review"
-  | "progress"
   | "result";
 
 export type UploadSource = "local" | "huggingface";
@@ -45,21 +44,21 @@ export const ARTIFACT_REQUIREMENTS: Record<FrameworkType, ArtifactRequirement[]>
       title: "Weights",
       required: true,
       accepts: ".safetensors,.bin,.pt,.pth",
-      hint: "Primary checkpoint weights used by the transformer runtime.",
+      hint: "e.g. model.safetensors, pytorch_model.bin",
     },
     {
       slot: "tokenizer",
       title: "Tokenizer Assets",
       required: true,
       accepts: ".json,.txt,.model,.vocab",
-      hint: "Tokenizer files like tokenizer.json, tokenizer_config.json, merges.txt, or vocab.txt.",
+      hint: "e.g. tokenizer.json, tokenizer_config.json",
     },
     {
       slot: "config",
       title: "Runtime Config Assets",
       required: true,
       accepts: ".json,.yaml,.yml,.bin",
-      hint: "Model runtime files such as config.json or training_args.bin.",
+      hint: "e.g. config.json, training_args.bin",
     },
     {
       slot: "label_map_file",
@@ -82,21 +81,21 @@ export const ARTIFACT_REQUIREMENTS: Record<FrameworkType, ArtifactRequirement[]>
       title: "Weights",
       required: true,
       accepts: ".pt,.pth,.bin",
-      hint: "Primary state dict or checkpoint file for the deep learning model.",
+      hint: "e.g. model.pt, checkpoint.pth",
     },
     {
       slot: "vocabulary",
       title: "Vocabulary / Preprocessing Assets",
       required: true,
       accepts: ".pkl,.json,.txt",
-      hint: "Vocabulary, lookup tables, or preprocessing assets required at runtime.",
+      hint: "e.g. vocab.json, preprocessing.pkl",
     },
     {
       slot: "config",
       title: "Runtime Config Assets",
       required: true,
       accepts: ".json,.yaml,.yml,.bin",
-      hint: "Architecture or runtime config assets the model depends on.",
+      hint: "e.g. config.json, training_args.bin",
     },
     {
       slot: "label_classes_file",
@@ -119,14 +118,14 @@ export const ARTIFACT_REQUIREMENTS: Record<FrameworkType, ArtifactRequirement[]>
       title: "Serialized Model",
       required: true,
       accepts: ".pkl,.joblib,.bin",
-      hint: "Serialized estimator or pipeline artifact.",
+      hint: "e.g. model.pkl, pipeline.joblib",
     },
     {
       slot: "config",
       title: "Feature / Runtime Config",
       required: true,
       accepts: ".json,.yaml,.yml,.txt",
-      hint: "Feature extraction, vectorizer, or runtime configuration files.",
+      hint: "e.g. vectorizer.json, runtime.yaml",
     },
     {
       slot: "label_classes_file",
@@ -339,13 +338,13 @@ export function fromUploadMetadata(metadata: UploadModelMetadata): WizardMetadat
 }
 
 export function buildLocalPreflightPayload(
-  draft: WizardMetadataDraft,
-  domain: DomainChoice,
+  draft: WizardMetadataDraft | null,
+  domain: DomainChoice | null,
   artifactFiles: Record<string, File[]>,
   dashboardFiles: File[],
 ): LocalUploadPreflightRequest {
   return {
-    metadata: toUploadMetadata(draft, domain),
+    metadata: draft && domain ? toUploadMetadata(draft, domain) : null,
     artifact_manifest: Object.fromEntries(
       Object.entries(artifactFiles)
         .filter(([, files]) => files.length > 0)

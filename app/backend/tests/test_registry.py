@@ -495,6 +495,43 @@ def test_local_uploaded_config_happy_path(tmp_path: Path) -> None:
     assert manifest["artifacts"]["weights"] == ["model.safetensors"]
 
 
+def test_local_uploaded_config_happy_path_without_manual_metadata(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = LocalUploadPreflightRequest(
+        metadata=None,
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="model.safetensors", size_bytes=42)],
+            "tokenizer": [
+                UploadFileDescriptor(name="tokenizer.json", size_bytes=11),
+                UploadFileDescriptor(name="tokenizer_config.json", size_bytes=8),
+            ],
+            "config": [UploadFileDescriptor(name="config.json", size_bytes=9)],
+        },
+    )
+    config_upload = _uploaded_registration_config()
+
+    preflight = registry.preflight_local_upload(
+        payload,
+        registration_config_uploads=[config_upload],
+    )
+    assert preflight.config_source == "uploaded"
+    assert preflight.normalized_metadata.display_name == "Sentiment Demo Config"
+    assert preflight.normalized_metadata.framework_type == "transformers"
+
+    outcome = registry.register_local_upload(
+        payload,
+        artifact_uploads=_build_local_uploads(),
+        dashboard_uploads=[],
+        registration_config_uploads=[config_upload],
+    )
+
+    assert outcome.result.branch == "local"
+    manifest_path = tmp_path / "prod-model-sentiment" / "model-config.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["display_name"] == "Sentiment Demo Config"
+    assert manifest["framework"]["type"] == "transformers"
+
+
 def test_local_uploaded_config_missing_required_file_raises_field_error(tmp_path: Path) -> None:
     registry = _build_registry(tmp_path)
     payload = _build_local_payload()
@@ -567,6 +604,24 @@ def test_local_generated_config_happy_path(tmp_path: Path) -> None:
     )
     assert manifest["framework"]["type"] == "pytorch"
     assert manifest["runtime"]["preprocessing"] == "normalize_text + texts_to_sequences"
+
+
+def test_local_generated_config_defaults_label_display_name_to_name(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        metadata=_build_metadata(
+            labels=[
+                UploadLabelClass(id=0, name="negative", display_name=None),
+                UploadLabelClass(id=1, name="positive", display_name="Class 1"),
+            ],
+        ),
+    )
+
+    preflight = registry.preflight_local_upload(payload, registration_config_uploads=[])
+
+    assert preflight.normalized_metadata.labels[0].display_name == "negative"
+    assert preflight.normalized_metadata.labels[1].display_name == "positive"
+    assert 'display_name: positive' in preflight.config_preview
 
 
 def test_transformer_preflight_requires_config_json(tmp_path: Path) -> None:

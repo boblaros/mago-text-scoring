@@ -1,0 +1,9 @@
+# Labels
+labels = ["sadness", "joy", "love", "anger", "fear", "surprise", "neutral"]
+
+# Data
+dataset_counts = {
+    "label_distribution": [121187, 141067, 34554, 57317, 47712, 14972, 9394],
+}
+
+COLORS = ["#003366", "#0066CC", "#4DA6FF", "#99CCFF", "#CCE5FF", "#7FB3D5", "#A9CCE3"]

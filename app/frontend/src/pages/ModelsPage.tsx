@@ -352,6 +352,7 @@ export function ModelsPage() {
           {
             "--model-accent": theme.accent,
             "--model-glow": theme.glow,
+            "--model-panel": theme.panel,
           } as CSSProperties
         }
         onClick={() => setSelectedModelId(model.model_id)}
@@ -366,6 +367,7 @@ export function ModelsPage() {
 
           <div className="model-row__topline-meta">
             <div className="model-row__chips">
+              {isSelected ? <span className="status-chip model-row__selected-chip">Selected</span> : null}
               <span className={`status-chip status-chip--${model.is_active ? "available" : "missing"}`}>
                 {model.is_active ? "enabled" : "disabled"}
               </span>

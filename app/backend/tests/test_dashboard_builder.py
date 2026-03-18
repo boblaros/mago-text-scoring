@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import yaml
@@ -300,3 +301,147 @@ def test_build_model_dashboard_without_sources_creates_generic_skeleton(tmp_path
     summary = summarize_dashboard(_registered_model(model_dir))
     assert summary["dashboard_status"] == "partial"
     assert summary["dashboard_sections_available"] == 2
+
+
+def test_load_model_dashboard_recovers_distribution_assets_from_dashboard_bundle(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path
+    app_root = repo_root / "app"
+    model_dir = app_root / "app-models" / "prod-model-demo"
+    dashboard_dir = model_dir / "dashboard"
+
+    _write_model_config(
+        model_dir,
+        {
+            "builder": "generic-v1",
+        },
+    )
+
+    (dashboard_dir / "summary").mkdir(parents=True)
+    (dashboard_dir / "distributions").mkdir(parents=True)
+    (dashboard_dir / "figures").mkdir(parents=True)
+
+    (dashboard_dir / "summary" / "overview.json").write_text(
+        json.dumps({"generated_at": "2026-03-19T10:30:00+00:00"}, indent=2),
+        encoding="utf-8",
+    )
+    (dashboard_dir / "summary" / "source-audit.json").write_text(
+        json.dumps({"artifact_counts": {"distributions": 2}}, indent=2),
+        encoding="utf-8",
+    )
+    (dashboard_dir / "distributions" / "class-distribution.json").write_text(
+        json.dumps(
+            {
+                "overall": [
+                    {"split": "overall", "label": "negative", "count": 14, "share": 0.56},
+                    {"split": "overall", "label": "positive", "count": 11, "share": 0.44},
+                ],
+                "splits": [
+                    {"split": "train", "label": "negative", "count": 8, "share": 0.57},
+                    {"split": "train", "label": "positive", "count": 6, "share": 0.43},
+                    {"split": "test", "label": "negative", "count": 6, "share": 0.55},
+                    {"split": "test", "label": "positive", "count": 5, "share": 0.45},
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (dashboard_dir / "distributions" / "source-dataset-distribution.json").write_text(
+        json.dumps(
+            {
+                "overall": [
+                    {"split": "overall", "source_dataset": "reddit", "count": 18, "share": 0.72},
+                    {"split": "overall", "source_dataset": "forum", "count": 7, "share": 0.28},
+                ],
+                "splits": [
+                    {"split": "train", "source_dataset": "reddit", "count": 10, "share": 0.71},
+                    {"split": "train", "source_dataset": "forum", "count": 4, "share": 0.29},
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (dashboard_dir / "figures" / "source-dataset-distribution.plotly.json").write_text(
+        json.dumps(
+            {
+                "data": [
+                    {
+                        "type": "bar",
+                        "x": ["reddit", "forum"],
+                        "y": [18, 7],
+                    }
+                ],
+                "layout": {"title": {"text": "Source Dataset Distribution"}},
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = {
+        "schema_version": "1.0.0",
+        "generated_at": "2026-03-19T10:30:00+00:00",
+        "dashboard_root": "app/app-models/prod-model-demo/dashboard",
+        "entrypoints": {
+            "overview": "app/app-models/prod-model-demo/dashboard/summary/overview.json",
+            "source_audit": "app/app-models/prod-model-demo/dashboard/summary/source-audit.json",
+        },
+        "sections": [
+            {
+                "id": "summary",
+                "title": "Summary",
+                "status": "available",
+                "files": [
+                    "app/app-models/prod-model-demo/dashboard/summary/overview.json",
+                    "app/app-models/prod-model-demo/dashboard/summary/source-audit.json",
+                ],
+            },
+            {
+                "id": "class_distribution",
+                "title": "Class Distribution",
+                "status": "missing",
+                "files": [],
+                "reason": "No class_distribution source was configured.",
+            },
+        ],
+    }
+    (dashboard_dir / "dashboard-manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    summary = summarize_dashboard(_registered_model(model_dir))
+    assert summary["dashboard_status"] == "available"
+    assert summary["dashboard_sections_available"] == 2
+    assert summary["dashboard_sections_total"] == 2
+
+    dashboard = load_model_dashboard(
+        _registered_model(model_dir),
+        lambda asset_path: f"/assets/{asset_path}",
+    )
+
+    assert dashboard.available is True
+    assert "distributions/class-distribution.json" in dashboard.documents
+    assert "distributions/source-dataset-distribution.json" in dashboard.documents
+
+    class_section = next(
+        section for section in (dashboard.manifest.sections if dashboard.manifest else []) if section.id == "class_distribution"
+    )
+    assert class_section.status == "available"
+    assert class_section.reason is None
+    assert "distributions/class-distribution.json" in class_section.files
+    assert "distributions/source-dataset-distribution.json" in class_section.files
+    assert "figures/source-dataset-distribution.plotly.json" in class_section.files
+    assert "class-distribution" in class_section.charts
+    assert "source-dataset-distribution" in class_section.charts
+
+    distribution_figures = [
+        figure for figure in dashboard.figures if figure.section_id == "class_distribution"
+    ]
+    assert {figure.id for figure in distribution_figures} == {
+        "class-distribution",
+        "source-dataset-distribution",
+    }

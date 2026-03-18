@@ -1,0 +1,16 @@
+# Labels
+labels = ["A1-A2", "B1-B2", "C1-C2"]
+
+# Data
+dataset_counts = {
+    "uk_key_stage": [5000, 10000, 5000],
+    "one_stop": [178, 170, 161],
+    "commonlit": [904, 2208, 1612],
+    "cerf": [560, 491, 443],
+    "cambridge": [61, 122, 99],
+    "asap_aes": [2530, 6038, 4408],
+    "asap2": [8598, 14368, 1762],
+    "all_datasets_unified": [17831, 33397, 13485],
+}
+
+COLORS = ["#003366", "#0066CC", "#4DA6FF"]

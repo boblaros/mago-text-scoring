@@ -369,23 +369,10 @@ class ModelRegistry:
         *,
         registration_config_uploads: list[UploadedPayload],
     ) -> LocalUploadPreflightResponse:
-        registration_mode = self._resolve_local_registration_mode(
-            registration_config_uploads
+        metadata, registration_mode, warnings = self._resolve_local_upload_metadata(
+            payload.metadata,
+            registration_config_uploads,
         )
-        metadata = self._normalize_metadata(payload.metadata)
-        self._ensure_model_id_available(metadata.model_id)
-
-        warnings: list[str] = []
-        if registration_mode == "uploaded":
-            registration_manifest, registration_warnings = self._load_uploaded_registration_manifest(
-                metadata,
-                registration_config_uploads,
-            )
-            metadata = self._merge_metadata_with_registration_manifest(
-                metadata,
-                registration_manifest,
-            )
-            warnings.extend(registration_warnings)
 
         artifact_checks, field_errors = self._artifact_selection_checks(
             metadata.framework_type,
@@ -428,23 +415,10 @@ class ModelRegistry:
         dashboard_uploads: list[UploadedPayload],
         registration_config_uploads: list[UploadedPayload],
     ) -> RegistrationOutcome:
-        registration_mode = self._resolve_local_registration_mode(
-            registration_config_uploads
+        metadata, registration_mode, warnings = self._resolve_local_upload_metadata(
+            payload.metadata,
+            registration_config_uploads,
         )
-        metadata = self._normalize_metadata(payload.metadata)
-        self._ensure_model_id_available(metadata.model_id)
-
-        warnings: list[str] = []
-        if registration_mode == "uploaded":
-            registration_manifest, registration_warnings = self._load_uploaded_registration_manifest(
-                metadata,
-                registration_config_uploads,
-            )
-            metadata = self._merge_metadata_with_registration_manifest(
-                metadata,
-                registration_manifest,
-            )
-            warnings.extend(registration_warnings)
 
         canonical_domain = self._canonicalize_domain(metadata.domain)
         model_dir = self._allocate_model_dir(canonical_domain, metadata.model_id)
@@ -832,7 +806,7 @@ class ModelRegistry:
 
     def _load_uploaded_registration_manifest(
         self,
-        metadata: UploadModelMetadata,
+        metadata: UploadModelMetadata | None,
         uploads: list[UploadedPayload],
     ) -> tuple[ModelManifest, list[str]]:
         if not uploads:
@@ -848,6 +822,8 @@ class ModelRegistry:
             )
 
         manifest = _parse_uploaded_registration_manifest(uploads[0])
+        if metadata is None:
+            return manifest, warnings
         if manifest.framework.type != metadata.framework_type:
             raise RegistryValidationError(
                 "The uploaded config does not match the selected model type.",
@@ -871,6 +847,90 @@ class ModelRegistry:
             )
         return manifest, warnings
 
+    def _resolve_local_upload_metadata(
+        self,
+        metadata: UploadModelMetadata | None,
+        registration_config_uploads: list[UploadedPayload],
+    ) -> tuple[UploadModelMetadata, str, list[str]]:
+        registration_mode = self._resolve_local_registration_mode(
+            registration_config_uploads
+        )
+        warnings: list[str] = []
+        normalized_metadata = (
+            self._normalize_metadata(metadata)
+            if metadata is not None
+            else None
+        )
+
+        if registration_mode == "uploaded":
+            registration_manifest, registration_warnings = self._load_uploaded_registration_manifest(
+                normalized_metadata,
+                registration_config_uploads,
+            )
+            warnings.extend(registration_warnings)
+            if normalized_metadata is None:
+                normalized_metadata = self._metadata_from_manifest(registration_manifest)
+            else:
+                normalized_metadata = self._merge_metadata_with_registration_manifest(
+                    normalized_metadata,
+                    registration_manifest,
+                )
+        elif normalized_metadata is None:
+            raise RegistryValidationError(
+                "Complete the model metadata or upload an existing registration config before continuing.",
+                field_errors={
+                    "metadata": (
+                        "Complete the model metadata or upload an existing registration config."
+                    )
+                },
+            )
+
+        self._ensure_model_id_available(normalized_metadata.model_id)
+        return normalized_metadata, registration_mode, warnings
+
+    def _metadata_from_manifest(self, manifest: ModelManifest) -> UploadModelMetadata:
+        labels = [
+            UploadLabelClass(
+                id=label.id,
+                name=label.name,
+                display_name=label.display_name,
+            )
+            for label in (manifest.labels or [])
+        ]
+        if not labels:
+            labels = [UploadLabelClass(id=0, name="class_0", display_name="Class 0")]
+
+        return self._normalize_metadata(
+            UploadModelMetadata(
+                model_id=manifest.model_id,
+                domain=manifest.domain,
+                display_name=manifest.display_name,
+                description=manifest.description,
+                version=manifest.version,
+                enable_on_upload=False,
+                framework_type=manifest.framework.type,
+                framework_task=manifest.framework.task or "sequence-classification",
+                framework_library=manifest.framework.library,
+                framework_problem_type=manifest.framework.problem_type,
+                backbone=manifest.framework.backbone,
+                architecture=manifest.framework.architecture,
+                base_model=manifest.framework.base_model,
+                embeddings=manifest.framework.embeddings,
+                output_type=manifest.label_type or "single-label-classification",
+                runtime_device=manifest.runtime.device,
+                runtime_max_sequence_length=manifest.runtime.max_sequence_length,
+                runtime_batch_size=manifest.runtime.batch_size,
+                runtime_truncation=manifest.runtime.truncation,
+                runtime_padding=manifest.runtime.padding,
+                runtime_preprocessing=manifest.runtime.preprocessing,
+                ui_display_name=manifest.ui.domain_display_name,
+                color_token=manifest.ui.color_token,
+                group=manifest.ui.group,
+                labels=labels,
+                model_config=manifest.model,
+            )
+        )
+
     def _normalize_metadata(self, metadata: UploadModelMetadata) -> UploadModelMetadata:
         framework_library = metadata.framework_library or _default_framework_library(
             metadata.framework_type
@@ -883,6 +943,7 @@ class ModelRegistry:
                 "ui_display_name": metadata.ui_display_name or canonical_domain.title(),
                 "color_token": metadata.color_token or canonical_domain,
                 "group": metadata.group or f"{canonical_domain}-custom",
+                "labels": [_normalize_upload_label(label) for label in metadata.labels],
             }
         )
 
@@ -1201,6 +1262,16 @@ def _labels_are_placeholder(labels: list[UploadLabelClass]) -> bool:
         return False
     label = labels[0]
     return label.id == 0 and label.name == "class_0"
+
+
+def _normalize_upload_label(label: UploadLabelClass) -> UploadLabelClass:
+    auto_name = f"class_{label.id}"
+    auto_display_name = f"Class {label.id}"
+    if label.display_name in {None, ""}:
+        return label.model_copy(update={"display_name": label.name})
+    if label.display_name == auto_display_name and label.name != auto_name:
+        return label.model_copy(update={"display_name": label.name})
+    return label
 
 
 def _artifact_requirement_error(
