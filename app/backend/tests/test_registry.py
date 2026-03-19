@@ -642,7 +642,54 @@ def test_transformer_preflight_requires_config_json(tmp_path: Path) -> None:
 
     assert (
         exc_info.value.field_errors["artifacts.config"]
-        == "Runtime Config Assets must include config.json for transformer models."
+        == "Runtime Config Assets must include config.json. "
+        "training_args.bin is not a supported runtime config file for this slot."
+    )
+
+
+def test_transformer_preflight_rejects_non_weight_file_in_weights_slot(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="training_args.bin", size_bytes=9)],
+            "tokenizer": [
+                UploadFileDescriptor(name="tokenizer.json", size_bytes=11),
+                UploadFileDescriptor(name="tokenizer_config.json", size_bytes=8),
+            ],
+            "config": [UploadFileDescriptor(name="config.json", size_bytes=9)],
+        },
+    )
+
+    with pytest.raises(RegistryValidationError) as exc_info:
+        registry.preflight_local_upload(payload, registration_config_uploads=[])
+
+    assert (
+        exc_info.value.field_errors["artifacts.weights"]
+        == "Weights only accept model.safetensors or pytorch_model.bin for transformer "
+        "sequence-classification uploads. training_args.bin is not a valid transformer weight file."
+    )
+
+
+def test_transformer_preflight_rejects_incomplete_tokenizer_bundle(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="model.safetensors", size_bytes=42)],
+            "tokenizer": [
+                UploadFileDescriptor(name="tokenizer_config.json", size_bytes=8),
+            ],
+            "config": [UploadFileDescriptor(name="config.json", size_bytes=9)],
+        },
+    )
+
+    with pytest.raises(RegistryValidationError) as exc_info:
+        registry.preflight_local_upload(payload, registration_config_uploads=[])
+
+    assert (
+        exc_info.value.field_errors["artifacts.tokenizer"]
+        == "Tokenizer Assets are incomplete. Missing one tokenizer definition file "
+        "(tokenizer.json, vocab.txt, tokenizer.model, spiece.model, sentencepiece.bpe.model, "
+        "or vocab.json with merges.txt)."
     )
 
 
@@ -674,7 +721,73 @@ def test_transformer_import_requires_config_json(tmp_path: Path) -> None:
 
     assert (
         exc_info.value.field_errors["artifacts.config"]
-        == "Runtime Config Assets must include config.json for transformer models."
+        == "Runtime Config Assets must include config.json. "
+        "training_args.bin is not a supported runtime config file for this slot."
+    )
+
+
+def test_transformer_import_rejects_non_weight_file_in_weights_slot(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="training_args.bin", size_bytes=9)],
+            "tokenizer": [
+                UploadFileDescriptor(name="tokenizer.json", size_bytes=11),
+                UploadFileDescriptor(name="tokenizer_config.json", size_bytes=8),
+            ],
+            "config": [UploadFileDescriptor(name="config.json", size_bytes=9)],
+        },
+    )
+
+    with pytest.raises(RegistryValidationError) as exc_info:
+        registry.register_local_upload(
+            payload,
+            artifact_uploads=[
+                UploadedPayload(path="weights/training_args.bin", content=b"bin"),
+                UploadedPayload(path="tokenizer/tokenizer.json", content=b"{}"),
+                UploadedPayload(path="tokenizer/tokenizer_config.json", content=b"{}"),
+                UploadedPayload(path="config/config.json", content=b"{}"),
+            ],
+            dashboard_uploads=[],
+            registration_config_uploads=[],
+        )
+
+    assert (
+        exc_info.value.field_errors["artifacts.weights"]
+        == "Weights only accept model.safetensors or pytorch_model.bin for transformer "
+        "sequence-classification uploads. training_args.bin is not a valid transformer weight file."
+    )
+
+
+def test_transformer_import_rejects_incomplete_tokenizer_bundle(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="model.safetensors", size_bytes=42)],
+            "tokenizer": [
+                UploadFileDescriptor(name="tokenizer_config.json", size_bytes=8),
+            ],
+            "config": [UploadFileDescriptor(name="config.json", size_bytes=9)],
+        },
+    )
+
+    with pytest.raises(RegistryValidationError) as exc_info:
+        registry.register_local_upload(
+            payload,
+            artifact_uploads=[
+                UploadedPayload(path="weights/model.safetensors", content=b"weights"),
+                UploadedPayload(path="tokenizer/tokenizer_config.json", content=b"{}"),
+                UploadedPayload(path="config/config.json", content=b"{}"),
+            ],
+            dashboard_uploads=[],
+            registration_config_uploads=[],
+        )
+
+    assert (
+        exc_info.value.field_errors["artifacts.tokenizer"]
+        == "Tokenizer Assets are incomplete. Missing one tokenizer definition file "
+        "(tokenizer.json, vocab.txt, tokenizer.model, spiece.model, sentencepiece.bpe.model, "
+        "or vocab.json with merges.txt)."
     )
 
 

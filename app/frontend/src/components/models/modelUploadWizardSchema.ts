@@ -22,6 +22,10 @@ export interface ArtifactRequirement {
   required: boolean;
   accepts: string;
   hint: string;
+  hintGroups?: Array<{
+    label: string;
+    items: string[];
+  }>;
 }
 
 export interface DomainChoice {
@@ -43,22 +47,39 @@ export const ARTIFACT_REQUIREMENTS: Record<FrameworkType, ArtifactRequirement[]>
       slot: "weights",
       title: "Weights",
       required: true,
-      accepts: ".safetensors,.bin,.pt,.pth",
-      hint: "e.g. model.safetensors, pytorch_model.bin",
+      accepts: ".safetensors,.bin",
+      hint: "Required: model.safetensors or pytorch_model.bin",
     },
     {
       slot: "tokenizer",
       title: "Tokenizer Assets",
       required: true,
-      accepts: ".json,.txt,.model,.vocab",
-      hint: "e.g. tokenizer.json, tokenizer_config.json",
+      accepts: ".json,.txt,.model",
+      hint: "Minimum upload: tokenizer_config.json plus one complete tokenizer source.",
+      hintGroups: [
+        {
+          label: "Always include",
+          items: ["tokenizer_config.json"],
+        },
+        {
+          label: "Add one complete tokenizer source",
+          items: [
+            "tokenizer.json",
+            "vocab.txt",
+            "tokenizer.model",
+            "spiece.model",
+            "sentencepiece.bpe.model",
+            "vocab.json + merges.txt",
+          ],
+        },
+      ],
     },
     {
       slot: "config",
       title: "Runtime Config Assets",
       required: true,
-      accepts: ".json,.yaml,.yml,.bin",
-      hint: "e.g. config.json, training_args.bin",
+      accepts: ".json",
+      hint: "Required: config.json",
     },
     {
       slot: "label_map_file",

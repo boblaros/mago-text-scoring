@@ -35,6 +35,7 @@ import {
   resolveBranchMode,
   summarizeDashboardReference,
   toUploadMetadata,
+  type ArtifactRequirement,
   type BranchMode,
   type DomainChoice,
   type FrameworkType,
@@ -46,7 +47,7 @@ import {
 type PreflightResult = LocalUploadPreflightResponse | HuggingFacePreflightResponse;
 type LocalConfigMode = "unknown" | "uploaded-config" | "manual-metadata";
 type LocalDetailsStage = "question" | "details";
-type LabelInputMode = "manual" | "file" | "raw";
+type LabelInputMode = "manual" | "file";
 
 interface WizardState {
   step: WizardStep;
@@ -100,7 +101,7 @@ type WizardAction =
 
 const STEP_DEFS: Array<{ id: WizardStep; label: string }> = [
   { id: "source", label: "Source" },
-  { id: "details", label: "Model Name & Task" },
+  { id: "details", label: "Model Metadata" },
   { id: "validate", label: "Model Artifacts" },
   { id: "review", label: "Review" },
   { id: "result", label: "Results" },
@@ -347,29 +348,8 @@ function normalizeLabelClasses(labels: UploadLabelClass[]): UploadLabelClass[] {
   }));
 }
 
-function toRawLabel(label: UploadLabelClass): UploadLabelClass {
-  const rawValue = String(label.id);
-  return {
-    id: label.id,
-    name: rawValue,
-    display_name: rawValue,
-  };
-}
-
-function normalizeRawLabels(labels: UploadLabelClass[]): UploadLabelClass[] {
-  if (labels.length === 0) {
-    return [{ id: 0, name: "0", display_name: "0" }];
-  }
-  return labels.map(toRawLabel);
-}
-
-function createNextRawLabel(labels: UploadLabelClass[]): UploadLabelClass {
-  const id = labels.reduce((current, label) => Math.max(current, label.id), -1) + 1;
-  return {
-    id,
-    name: String(id),
-    display_name: String(id),
-  };
+function isNonNull<T>(value: T | null): value is T {
+  return value !== null;
 }
 
 function parseLabelMapPayload(payload: unknown): UploadLabelClass[] | null {
@@ -384,7 +364,7 @@ function parseLabelMapPayload(payload: unknown): UploadLabelClass[] | null {
             }
           : null,
       )
-      .filter((label): label is UploadLabelClass => label !== null);
+      .filter(isNonNull);
     return labels.length > 0 ? labels : null;
   }
 
@@ -417,7 +397,7 @@ function parseLabelMapPayload(payload: unknown): UploadLabelClass[] | null {
         display_name: value.trim(),
       } satisfies UploadLabelClass;
     })
-    .filter((label): label is UploadLabelClass => label !== null)
+    .filter(isNonNull)
     .sort((left, right) => left.id - right.id);
   if (numericKeyEntries.length === entries.length) {
     return numericKeyEntries;
@@ -438,7 +418,7 @@ function parseLabelMapPayload(payload: unknown): UploadLabelClass[] | null {
         display_name: key.trim(),
       } satisfies UploadLabelClass;
     })
-    .filter((label): label is UploadLabelClass => label !== null)
+    .filter(isNonNull)
     .sort((left, right) => left.id - right.id);
   if (numericValueEntries.length === entries.length) {
     return numericValueEntries;
@@ -488,13 +468,6 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
       return {
         ...nextState,
         labelInputMode: action.mode,
-        metadata: {
-          ...nextState.metadata,
-          labels:
-            action.mode === "raw"
-              ? normalizeRawLabels(state.metadata.labels)
-              : nextState.metadata.labels,
-        },
         artifactFiles:
           action.mode === "file"
             ? nextState.artifactFiles
@@ -574,17 +547,7 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         metadata: {
           ...state.metadata,
           labels: state.metadata.labels.map((label, index) =>
-            index === action.index
-              ? state.labelInputMode === "raw"
-                ? toRawLabel({
-                    ...label,
-                    id:
-                      typeof action.patch.id === "number" && Number.isFinite(action.patch.id)
-                        ? action.patch.id
-                        : label.id,
-                  })
-                : applyLabelPatch(label, action.patch)
-              : label,
+            index === action.index ? applyLabelPatch(label, action.patch) : label,
           ),
         },
       };
@@ -593,12 +556,7 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         ...clearExecutionState(state),
         metadata: {
           ...state.metadata,
-          labels: [
-            ...state.metadata.labels,
-            state.labelInputMode === "raw"
-              ? createNextRawLabel(state.metadata.labels)
-              : createNextLabel(state.metadata.labels),
-          ],
+          labels: [...state.metadata.labels, createNextLabel(state.metadata.labels)],
         },
       };
     case "remove-label":
@@ -791,7 +749,7 @@ function validateDetailsStep(
     (state.artifactFiles.label_map_file ?? []).length === 0
   ) {
     errors["artifacts.label_map_file"] =
-      "Upload a label map file or switch to manual or raw numbers.";
+      "Upload a label map file or switch to manual labels.";
   }
   if (state.metadata.labels.length === 0) {
     errors.labels = "At least one label is required.";
@@ -829,24 +787,22 @@ function validateDetailsStep(
 
 async function validateLocalFilesStep(
   state: WizardState,
-  frameworkType: FrameworkType,
 ): Promise<Record<string, string>> {
   const errors: Record<string, string> = {};
+  const frameworkType = state.metadata.framework_type;
   const requirements = ARTIFACT_REQUIREMENTS[frameworkType];
   for (const requirement of requirements) {
     const files = state.artifactFiles[requirement.slot] ?? [];
-    if (requirement.required && files.length === 0) {
-      errors[`artifacts.${requirement.slot}`] = `${requirement.title} requires at least 1 file.`;
-      continue;
-    }
-
-    const allowedExtensions = parseAcceptedExtensions(requirement.accepts);
-    const invalidFile = files.find((file) => {
-      const extension = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
-      return !allowedExtensions.includes(extension);
-    });
-    if (invalidFile) {
-      errors[`artifacts.${requirement.slot}`] = `${invalidFile.name} has an unsupported file type.`;
+    const error =
+      frameworkType === "transformers" &&
+      state.metadata.framework_task === "sequence-classification" &&
+      (requirement.slot === "weights"
+        || requirement.slot === "tokenizer"
+        || requirement.slot === "config")
+        ? validateTransformersSequenceArtifactFiles(requirement.slot, files)
+        : validateArtifactFilesByExtension(requirement, files);
+    if (error) {
+      errors[`artifacts.${requirement.slot}`] = error;
     }
   }
 
@@ -888,6 +844,192 @@ async function validateLocalFilesStep(
   return errors;
 }
 
+const TRANSFORMER_SEQUENCE_WEIGHT_FILENAMES = new Set([
+  "model.safetensors",
+  "pytorch_model.bin",
+]);
+const TRANSFORMER_SEQUENCE_TOKENIZER_SINGLE_FILE_FILENAMES = new Set([
+  "tokenizer.json",
+  "vocab.txt",
+  "tokenizer.model",
+  "spiece.model",
+  "sentencepiece.bpe.model",
+]);
+const TRANSFORMER_SEQUENCE_TOKENIZER_PAIR_FILENAMES = new Set([
+  "vocab.json",
+  "merges.txt",
+]);
+const TRANSFORMER_SEQUENCE_TOKENIZER_OPTIONAL_FILENAMES = new Set([
+  "special_tokens_map.json",
+  "added_tokens.json",
+]);
+const TRANSFORMER_SEQUENCE_CONFIG_FILENAMES = new Set(["config.json"]);
+const TRANSFORMER_SEQUENCE_SLOT_LABELS: Record<string, string> = {
+  weights: "Weights",
+  tokenizer: "Tokenizer Assets",
+  config: "Runtime Config Assets",
+};
+const TRANSFORMER_SEQUENCE_FILENAME_TO_SLOT: Record<string, string> = {
+  "model.safetensors": "weights",
+  "pytorch_model.bin": "weights",
+  "tokenizer.json": "tokenizer",
+  "vocab.txt": "tokenizer",
+  "tokenizer.model": "tokenizer",
+  "spiece.model": "tokenizer",
+  "sentencepiece.bpe.model": "tokenizer",
+  "vocab.json": "tokenizer",
+  "merges.txt": "tokenizer",
+  "special_tokens_map.json": "tokenizer",
+  "added_tokens.json": "tokenizer",
+  "tokenizer_config.json": "tokenizer",
+  "config.json": "config",
+};
+
+function validateArtifactFilesByExtension(
+  requirement: ArtifactRequirement,
+  files: File[],
+): string | null {
+  if (requirement.required && files.length === 0) {
+    return `${requirement.title} requires at least 1 file.`;
+  }
+
+  const allowedExtensions = parseAcceptedExtensions(requirement.accepts);
+  const invalidFile = files.find((file) => {
+    const extension = `.${file.name.split(".").pop()?.toLowerCase() ?? ""}`;
+    return !allowedExtensions.includes(extension);
+  });
+  if (invalidFile) {
+    return `${invalidFile.name} has an unsupported file type.`;
+  }
+
+  return null;
+}
+
+function validateTransformersSequenceArtifactFiles(
+  slot: string,
+  files: File[],
+): string | null {
+  const basenames = files.map((file) => file.name.split(/[/\\]/).pop() ?? file.name);
+  const normalizedNames = new Set(basenames.map((name) => name.toLowerCase()));
+
+  if (slot === "weights") {
+    if (basenames.length === 0) {
+      return "Weights must include model.safetensors or pytorch_model.bin.";
+    }
+    const invalidNames = basenames.filter(
+      (name) => !TRANSFORMER_SEQUENCE_WEIGHT_FILENAMES.has(name.toLowerCase()),
+    );
+    if (invalidNames.length > 0) {
+      return (
+        "Weights only accept model.safetensors or pytorch_model.bin for transformer sequence-classification uploads. "
+        + describeTransformersSequenceFileIssue(invalidNames[0], slot)
+      );
+    }
+    if (basenames.length > 2) {
+      return "Weights accept at most model.safetensors and pytorch_model.bin.";
+    }
+    return null;
+  }
+
+  if (slot === "config") {
+    const invalidNames = basenames.filter(
+      (name) => !TRANSFORMER_SEQUENCE_CONFIG_FILENAMES.has(name.toLowerCase()),
+    );
+    if (!normalizedNames.has("config.json")) {
+      if (invalidNames.length > 0) {
+        return `Runtime Config Assets must include config.json. ${describeTransformersSequenceFileIssue(invalidNames[0], slot)}`;
+      }
+      return "Runtime Config Assets must include config.json.";
+    }
+    if (invalidNames.length > 0) {
+      return (
+        "Runtime Config Assets only accept config.json for transformer sequence-classification uploads. "
+        + describeTransformersSequenceFileIssue(invalidNames[0], slot)
+      );
+    }
+    return null;
+  }
+
+  if (slot === "tokenizer") {
+    if (basenames.length === 0) {
+      return (
+        "Tokenizer Assets are incomplete. Upload tokenizer_config.json plus tokenizer.json, vocab.txt, tokenizer.model, spiece.model, sentencepiece.bpe.model, or vocab.json with merges.txt."
+      );
+    }
+
+    const allowedNames = new Set([
+      ...TRANSFORMER_SEQUENCE_TOKENIZER_SINGLE_FILE_FILENAMES,
+      ...TRANSFORMER_SEQUENCE_TOKENIZER_PAIR_FILENAMES,
+      ...TRANSFORMER_SEQUENCE_TOKENIZER_OPTIONAL_FILENAMES,
+      "tokenizer_config.json",
+    ]);
+    const invalidNames = basenames.filter((name) => !allowedNames.has(name.toLowerCase()));
+    if (invalidNames.length > 0) {
+      return (
+        "Tokenizer Assets only accept tokenizer_config.json, tokenizer.json, vocab.txt, tokenizer.model, spiece.model, sentencepiece.bpe.model, vocab.json, merges.txt, special_tokens_map.json, or added_tokens.json. "
+        + describeTransformersSequenceFileIssue(invalidNames[0], slot)
+      );
+    }
+
+    const missingParts: string[] = [];
+    const hasTokenizerConfig = normalizedNames.has("tokenizer_config.json");
+    const hasVocabJson = normalizedNames.has("vocab.json");
+    const hasMergesTxt = normalizedNames.has("merges.txt");
+    const hasTokenizerDefinition =
+      Array.from(TRANSFORMER_SEQUENCE_TOKENIZER_SINGLE_FILE_FILENAMES).some((name) =>
+        normalizedNames.has(name),
+      ) || (hasVocabJson && hasMergesTxt);
+
+    if (!hasTokenizerConfig) {
+      missingParts.push("tokenizer_config.json");
+    }
+    if (hasVocabJson && !hasMergesTxt) {
+      missingParts.push("merges.txt");
+    } else if (hasMergesTxt && !hasVocabJson) {
+      missingParts.push("vocab.json");
+    } else if (!hasTokenizerDefinition) {
+      missingParts.push(
+        "one tokenizer definition file (tokenizer.json, vocab.txt, tokenizer.model, spiece.model, sentencepiece.bpe.model, or vocab.json with merges.txt)",
+      );
+    }
+
+    if (missingParts.length > 0) {
+      return `Tokenizer Assets are incomplete. Missing ${formatMissingItems(missingParts)}.`;
+    }
+  }
+
+  return null;
+}
+
+function describeTransformersSequenceFileIssue(filename: string, currentSlot: string): string {
+  const normalizedName = (filename.split(/[/\\]/).pop() ?? filename).toLowerCase();
+  const expectedSlot = TRANSFORMER_SEQUENCE_FILENAME_TO_SLOT[normalizedName];
+  if (expectedSlot && expectedSlot !== currentSlot) {
+    return `${filename} is misplaced. Move it to ${TRANSFORMER_SEQUENCE_SLOT_LABELS[expectedSlot]}.`;
+  }
+  if (currentSlot === "weights") {
+    return `${filename} is not a valid transformer weight file.`;
+  }
+  if (currentSlot === "config") {
+    return `${filename} is not a supported runtime config file for this slot.`;
+  }
+  if (currentSlot === "tokenizer") {
+    return `${filename} is not a supported tokenizer asset for this slot.`;
+  }
+  return `${filename} is not supported in this artifact slot.`;
+}
+
+function formatMissingItems(items: string[]): string {
+  const uniqueItems = Array.from(new Set(items));
+  if (uniqueItems.length === 1) {
+    return uniqueItems[0]!;
+  }
+  if (uniqueItems.length === 2) {
+    return `${uniqueItems[0]} and ${uniqueItems[1]}`;
+  }
+  return `${uniqueItems.slice(0, -1).join(", ")}, and ${uniqueItems[uniqueItems.length - 1]}`;
+}
+
 function getCurrentMetadata(state: WizardState, domains: DomainChoice[]) {
   if (state.source === "local" && state.localConfigMode === "uploaded-config") {
     return null;
@@ -909,6 +1051,16 @@ function isHuggingFacePreflight(
   value: PreflightResult | null,
 ): value is HuggingFacePreflightResponse {
   return Boolean(value && "ready_to_import" in value);
+}
+
+const HUGGING_FACE_SIZE_ESTIMATE_WARNING =
+  "Download size could not be estimated precisely because one or more repo files do not report a size.";
+
+function humanizeHuggingFacePreflightWarning(warning: string) {
+  if (warning === HUGGING_FACE_SIZE_ESTIMATE_WARNING) {
+    return "Some Hugging Face files do not publish their size, so the download estimate is approximate. The import can still work, but the final size may be larger than shown.";
+  }
+  return warning;
 }
 
 export function ModelUploadWizard({
@@ -1069,6 +1221,11 @@ export function ModelUploadWizard({
 
   const canClose = state.submissionStatus !== "running";
   const isSubmitting = state.submissionStatus === "running";
+  const huggingFacePreflight = isHuggingFacePreflight(state.preflight) ? state.preflight : null;
+  const isHuggingFaceValidationRunning =
+    state.step === "validate" &&
+    branch === "huggingface" &&
+    state.message === "Inspecting the remote repo...";
   const validationErrors = Object.entries(state.fieldErrors)
     .filter(([key]) =>
       branch === "huggingface"
@@ -1076,46 +1233,57 @@ export function ModelUploadWizard({
         : key === "dashboard" || key.startsWith("artifacts."),
     )
     .map(([, value]) => value);
+  const localValidationDetail =
+    validationErrors[0]
+    ?? (isLocalPreflight(state.preflight)
+      ? state.preflight.artifact_checks.find((check) => !check.valid)?.message ?? null
+      : null)
+    ?? state.message;
+  const huggingFaceValidateDetail =
+    validationErrors[0]
+    ?? (huggingFacePreflight
+      ? huggingFacePreflight.blocking_reasons[0] ?? null
+      : null)
+    ?? state.message;
+  const huggingFaceWarnings =
+    branch === "huggingface" && huggingFacePreflight
+      ? huggingFacePreflight.warnings.map(humanizeHuggingFacePreflightWarning)
+      : [];
+  const huggingFaceCanAdvanceToReview = Boolean(huggingFacePreflight?.ready_to_import);
+  const huggingFacePreflightState: "idle" | "running" | "success" | "blocked" | "error" =
+    branch !== "huggingface"
+      ? "idle"
+      : isHuggingFaceValidationRunning
+        ? "running"
+        : huggingFacePreflight?.ready_to_import
+          ? "success"
+          : huggingFacePreflight
+            ? "blocked"
+            : huggingFaceValidateDetail
+              ? "error"
+              : "idle";
   const validateStatus =
     state.step !== "validate" || !branch
       ? null
       : branch === "huggingface"
-        ? isHuggingFacePreflight(state.preflight)
-          ? state.preflight.ready_to_import
-            ? null
-            : {
-                tone: "error",
-                title: "Validation failed",
-                detail:
-                  state.preflight.blocking_reasons[0] ?? "The repo still has blocking issues.",
-              }
-          : state.message === "Inspecting the remote repo..."
-            ? null
-            : validationErrors[0] || state.message
-              ? {
-                  tone: "error",
-                  title: "Validation failed",
-                  detail:
-                    validationErrors[0] ??
-                    state.message ??
-                    "The repo still needs attention before import.",
-                }
-              : null
+        ? null
         : isLocalPreflight(state.preflight)
           ? state.preflight.ready
             ? null
             : {
                 tone: "error",
                 title: "Validation failed",
-                detail: null,
+                detail:
+                  localValidationDetail
+                  ?? "Resolve the highlighted file issues before continuing.",
               }
           : state.message === "Validating files and building a config preview..."
             ? null
-            : validationErrors[0] || state.message
+            : localValidationDetail
               ? {
                   tone: "error",
                   title: "Validation failed",
-                  detail: null,
+                  detail: localValidationDetail,
                 }
               : null;
 
@@ -1217,9 +1385,6 @@ export function ModelUploadWizard({
           type: "apply-normalized-metadata",
           metadata: fromUploadMetadata(response.normalized_metadata),
         });
-        if (response.ready_to_import) {
-          dispatch({ type: "set-step", step: "review" });
-        }
       } catch (error) {
         dispatch({
           type: "set-errors",
@@ -1230,7 +1395,7 @@ export function ModelUploadWizard({
       return;
     }
 
-    const localErrors = await validateLocalFilesStep(state, currentFramework);
+    const localErrors = await validateLocalFilesStep(state);
     if (Object.keys(localErrors).length > 0) {
       dispatch({
         type: "set-errors",
@@ -1499,11 +1664,11 @@ export function ModelUploadWizard({
 
   const renderMetadataSection = () => (
     <div className="model-upload-sheet__section">
-      <div className="panel__eyebrow">Model Name &amp; Task</div>
+      <div className="model-upload-sheet__section-title-row">
+        <div className="panel__eyebrow">Model Name &amp; Task</div>
+        <span className="model-upload-sheet__section-title-note">Required</span>
+      </div>
       <div className="model-upload-sheet__subsection">
-        <div className="model-upload-sheet__subsection-header model-upload-sheet__subsection-header--aside">
-          <span>Required</span>
-        </div>
         <div className="model-upload-sheet__grid">
         <label
           htmlFor={fieldId("display-name")}
@@ -1540,7 +1705,7 @@ export function ModelUploadWizard({
           <span className="field-shell__label-row">
             <span>Model id</span>
             <span
-              className="field-info-badge"
+              className="field-info-badge field-info-badge--wide"
               tabIndex={0}
               role="note"
               aria-label="Unique registry id used for routes, manifests, and storage."
@@ -1585,15 +1750,6 @@ export function ModelUploadWizard({
         >
           <span className="field-shell__label-row">
             <span>Task</span>
-            <span
-              className="field-info-badge"
-              tabIndex={0}
-              role="note"
-              aria-label="Visible and editable because it affects runtime compatibility."
-              data-tooltip="Visible and editable because it affects runtime compatibility."
-            >
-              i
-            </span>
             {state.metadata.framework_task !== "sequence-classification"
               ? renderWarningBadge(
                   "This task selector is future-facing for now. Only Sequence Classification is currently runtime-supported.",
@@ -1623,15 +1779,6 @@ export function ModelUploadWizard({
           >
             <span className="field-shell__label-row">
               <span>Model type</span>
-              <span
-                className="field-info-badge"
-                tabIndex={0}
-                role="note"
-                aria-label="This controls the artifact requirements and runtime mapping."
-                data-tooltip="This controls the artifact requirements and runtime mapping."
-              >
-                i
-              </span>
               {state.metadata.framework_type !== "transformers"
                 ? renderWarningBadge(
                     "You can upload this model, but it will not be runtime-compatible yet. Only transformer-based encoder models are currently supported for activation and live analysis.",
@@ -1690,14 +1837,6 @@ export function ModelUploadWizard({
                     Upload file
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className={`mini-button${state.labelInputMode === "raw" ? " mini-button--active" : ""}`}
-                  onClick={() => dispatch({ type: "set-label-input-mode", mode: "raw" })}
-                  data-testid="label-input-mode-raw"
-                >
-                  Raw numbers
-                </button>
               </div>
             </div>
 
@@ -1748,12 +1887,7 @@ export function ModelUploadWizard({
               <>
                 <div className="label-editor">
                   {state.metadata.labels.map((label, index) => (
-                    <div
-                      key={`${label.id}-${index}`}
-                      className={`label-editor__row${
-                        state.labelInputMode === "raw" ? " label-editor__row--raw" : ""
-                      }`}
-                    >
+                    <div key={`${label.id}-${index}`} className="label-editor__row">
                       <div className="model-upload-sheet__input-stack">
                         <input
                           type="number"
@@ -1770,35 +1904,22 @@ export function ModelUploadWizard({
                           <small className="field-error">{fieldErrorFor(state, `label-id-${index}`)}</small>
                         ) : null}
                       </div>
-                      {state.labelInputMode === "raw" ? (
-                        <div className="label-editor__raw-copy">
-                          <span className="label-editor__raw-pair">
-                            <span>name</span>
-                            <strong>{String(label.id)}</strong>
-                          </span>
-                          <span className="label-editor__raw-pair">
-                            <span>display</span>
-                            <strong>{String(label.id)}</strong>
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="model-upload-sheet__input-stack">
-                          <input
-                            value={label.name}
-                            onChange={(event) =>
-                              dispatch({
-                                type: "update-label",
-                                index,
-                                patch: { name: event.target.value },
-                              })
-                            }
-                            placeholder="label_name"
-                          />
-                          {fieldErrorFor(state, `label-name-${index}`) ? (
-                            <small className="field-error">{fieldErrorFor(state, `label-name-${index}`)}</small>
-                          ) : null}
-                        </div>
-                      )}
+                      <div className="model-upload-sheet__input-stack">
+                        <input
+                          value={label.name}
+                          onChange={(event) =>
+                            dispatch({
+                              type: "update-label",
+                              index,
+                              patch: { name: event.target.value },
+                            })
+                          }
+                          placeholder="label_name"
+                        />
+                        {fieldErrorFor(state, `label-name-${index}`) ? (
+                          <small className="field-error">{fieldErrorFor(state, `label-name-${index}`)}</small>
+                        ) : null}
+                      </div>
                       <button
                         type="button"
                         className="mini-button"
@@ -1810,11 +1931,6 @@ export function ModelUploadWizard({
                     </div>
                   ))}
                 </div>
-                {state.labelInputMode === "raw" ? (
-                  <div className="field-inline-note">
-                    Each numeric id is reused as both the internal label name and the display name.
-                  </div>
-                ) : null}
                 <div className="label-editor__actions">
                   <button type="button" className="mini-button" onClick={() => dispatch({ type: "add-label" })}>
                     Add label
@@ -2111,7 +2227,6 @@ export function ModelUploadWizard({
         htmlFor={fieldId("registration-config")}
         className={`field-shell${fieldErrorFor(state, "registration_config") ? " field-shell--error" : ""}`}
       >
-        <span>Registration config file</span>
         <input
           id={fieldId("registration-config")}
           aria-label="Registration config file"
@@ -2230,6 +2345,26 @@ export function ModelUploadWizard({
       </div>
     ) : null;
 
+  const renderArtifactHint = (requirement: ArtifactRequirement) => (
+    <div className="artifact-slot__hint">
+      <p>{requirement.hint}</p>
+      {requirement.hintGroups?.length ? (
+        <div className="artifact-slot__hint-groups">
+          {requirement.hintGroups.map((group) => (
+            <div key={`${requirement.slot}-${group.label}`} className="artifact-slot__hint-group">
+              <strong>{group.label}</strong>
+              <div className="artifact-slot__hint-items">
+                {group.items.map((item) => (
+                  <span key={`${requirement.slot}-${group.label}-${item}`}>{item}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+
   const renderLocalValidateStep = () => {
     return (
       <div className="model-upload-sheet__content">
@@ -2258,7 +2393,7 @@ export function ModelUploadWizard({
                     </div>
                     <span>{requirement.required ? "Required" : "Optional"}</span>
                   </div>
-                  <p>{requirement.hint}</p>
+                  {renderArtifactHint(requirement)}
                   <input
                     id={fieldId(`artifact-${requirement.slot}`)}
                     aria-label={requirement.title}
@@ -2281,6 +2416,7 @@ export function ModelUploadWizard({
                       ))}
                     </div>
                   ) : null}
+                  {artifactError ? <small className="field-error">{artifactError}</small> : null}
                 </label>
               );
             })}
@@ -2335,6 +2471,7 @@ export function ModelUploadWizard({
                   ))}
                 </div>
               ) : null}
+              {dashboardError ? <small className="field-error">{dashboardError}</small> : null}
             </label>
               );
             })()}
@@ -2344,74 +2481,107 @@ export function ModelUploadWizard({
     );
   };
 
-  const renderHuggingFaceValidateStep = () => (
-    <div className="model-upload-sheet__content">
-      <div className="model-upload-sheet__section">
-        <div className="panel__eyebrow">Hugging Face Repo</div>
-        <label
-          htmlFor={fieldId("hf-repo")}
-          className={`field-shell${fieldErrorFor(state, "hf_repo") ? " field-shell--error" : ""}`}
-        >
-          <span>Repo URL or repo id</span>
-          <input
-            id={fieldId("hf-repo")}
-            aria-label="Repo URL or repo id"
-            value={state.hfRepoInput}
-            onChange={(event) => dispatch({ type: "set-hf-repo-input", value: event.target.value })}
-            placeholder="org/model-name or https://huggingface.co/org/model-name"
-            data-testid="hf-repo-input"
-          />
-          <small>{fieldErrorFor(state, "hf_repo") ?? "We accept a full huggingface.co model URL or a repo id like org/model-name."}</small>
-        </label>
-      </div>
-
-      {isHuggingFacePreflight(state.preflight) ? (
-        <div className="model-upload-sheet__section" data-testid="hf-preflight-summary">
-          <div className="panel__eyebrow">Preflight Result</div>
-          <div className="upload-review">
-            <div className="upload-review__item">
-              <strong>Detected type</strong>
-              <span>{state.preflight.detected_framework_type ? frameworkLabel(state.preflight.detected_framework_type as FrameworkType) : "Unknown"}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Task</strong>
-              <span>{state.preflight.detected_task ?? "Unknown"}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Estimated size</strong>
-              <span>{formatBytes(state.preflight.estimated_download_size_bytes)}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Disk free</strong>
-              <span>{formatBytes(state.preflight.disk_free_bytes)}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Memory estimate</strong>
-              <span>{formatBytes(state.preflight.memory_estimate_bytes)}</span>
-            </div>
-            <div className="upload-review__item">
-              <strong>Compatibility</strong>
-              <span className={`status-chip status-chip--${state.preflight.ready_to_import ? "ready" : "incompatible"}`}>
-                {state.preflight.ready_to_import ? "ready to import" : "blocked"}
-              </span>
-            </div>
-          </div>
-
-          <div className="model-upload-sheet__preflight-list">
-            {state.preflight.required_files.map((file) => (
-              <div key={file.path} className="upload-review__item">
-                <strong>{file.path}</strong>
-                <span className={`status-chip status-chip--${file.available ? "ready" : "missing"}`}>
-                  {file.available ? "found" : "missing"}
-                </span>
-                <p>{file.message ?? `${file.category} · ${formatBytes(file.size_bytes)}`}</p>
+  const renderHuggingFaceValidateStep = () => {
+    const requiredFiles = huggingFacePreflight?.required_files.filter((file) => file.required) ?? [];
+    const availableRequiredFiles = requiredFiles.filter((file) => file.available).length;
+    const fileSummary = huggingFacePreflight
+      ? `${availableRequiredFiles}/${requiredFiles.length || huggingFacePreflight.required_files.length} required files found`
+      : isHuggingFaceValidationRunning
+        ? "Checking required files..."
+        : "Not checked yet";
+    const sizeSummary = huggingFacePreflight
+      ? formatBytes(huggingFacePreflight.estimated_download_size_bytes)
+      : isHuggingFaceValidationRunning
+        ? "Estimating..."
+        : "Will appear after preflight";
+    const preflightHighlights = [
+      {
+        label: "Files",
+        value: fileSummary,
+        pending: !huggingFacePreflight,
+      },
+      {
+        label: "Size",
+        value: sizeSummary,
+        pending: !huggingFacePreflight,
+      },
+    ];
+    return (
+      <div className="model-upload-sheet__content model-upload-sheet__content--hf-validate">
+        <div className="model-upload-sheet__hf-validate-shell">
+          <div className="model-upload-sheet__section model-upload-sheet__section--hf-repo">
+            <div className="model-upload-sheet__hf-repo-card">
+              <div className="model-upload-sheet__hf-repo-topline">
+                <div className="model-upload-sheet__hf-repo-lead">
+                  <span className="model-upload-sheet__hf-repo-icon-shell" aria-hidden="true">
+                    <img
+                      src={huggingFaceLogo}
+                      alt=""
+                      className="model-upload-sheet__hf-repo-icon-image"
+                    />
+                  </span>
+                  <div className="model-upload-sheet__hf-repo-copy">
+                    <div className="panel__eyebrow">Hugging Face Repo</div>
+                  </div>
+                </div>
+                {huggingFacePreflightState === "success" ? (
+                  <span className="model-upload-sheet__hf-preflight-badge model-upload-sheet__hf-preflight-badge--success">
+                    Ready
+                  </span>
+                ) : null}
               </div>
-            ))}
+
+              <div className="model-upload-sheet__hf-repo-main">
+                <label
+                  htmlFor={fieldId("hf-repo")}
+                  className={`field-shell field-shell--compact model-upload-sheet__hf-repo-field${
+                    fieldErrorFor(state, "hf_repo") ? " field-shell--error" : ""
+                  }`}
+                >
+                  <span>Repo URL or repo ID</span>
+                <input
+                  id={fieldId("hf-repo")}
+                  aria-label="Repo URL or repo id"
+                  value={state.hfRepoInput}
+                  onChange={(event) => dispatch({ type: "set-hf-repo-input", value: event.target.value })}
+                  placeholder="org/model-name or https://huggingface.co/org/model-name"
+                  data-testid="hf-repo-input"
+                />
+                {fieldErrorFor(state, "hf_repo") ? (
+                  <small>{fieldErrorFor(state, "hf_repo")}</small>
+                ) : null}
+                </label>
+
+                <div className="model-upload-sheet__hf-preflight-highlights model-upload-sheet__hf-preflight-highlights--inline">
+                  {preflightHighlights.map((fact) => (
+                    <div key={fact.label} className="model-upload-sheet__hf-preflight-highlight">
+                      <span>{fact.label}</span>
+                      <strong
+                        className={
+                          fact.pending ? "model-upload-sheet__hf-preflight-highlight-value--pending" : undefined
+                        }
+                      >
+                        {fact.value}
+                      </strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
+
+          {huggingFaceWarnings.length > 0 ? (
+            <div
+              className="inline-alert inline-alert--warning model-upload-sheet__hf-preflight-warning model-upload-sheet__hf-preflight-warning-bar"
+              role="status"
+            >
+              {huggingFaceWarnings.join(" ")}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderValidateStep = () =>
     branch === "huggingface" ? renderHuggingFaceValidateStep() : renderLocalValidateStep();
@@ -2422,7 +2592,7 @@ export function ModelUploadWizard({
       return null;
     }
 
-    const warnings = state.preflight?.warnings ?? [];
+    const warnings = branch === "huggingface" ? [] : state.preflight?.warnings ?? [];
     const configSourceLabel =
       isLocalPreflight(state.preflight) && state.preflight.config_source === "uploaded"
         ? "Uploaded by user"
@@ -2540,7 +2710,7 @@ export function ModelUploadWizard({
           </span>
           <div className="model-upload-sheet__success-copy">
             <h3>Model uploaded successfully</h3>
-            <p>{result.display_name} was uploaded successfully and is now available in Model Management.</p>
+            <p>{result.display_name} is now available in Model Management section.</p>
           </div>
         </section>
       </div>
@@ -2589,6 +2759,15 @@ export function ModelUploadWizard({
       );
     }
     if (state.step === "validate") {
+      const huggingFacePrimaryLabel = isHuggingFaceValidationRunning
+        ? "Running Preflight..."
+        : huggingFaceCanAdvanceToReview
+          ? "Final Review"
+          : "Run Preflight";
+      const handleValidatePrimaryAction =
+        branch === "huggingface" && huggingFaceCanAdvanceToReview
+          ? () => dispatch({ type: "set-step", step: "review" })
+          : () => void handleRunValidation();
       return (
         <>
           {validateStatus ? (
@@ -2607,11 +2786,21 @@ export function ModelUploadWizard({
               </div>
             </div>
           ) : null}
-          <button type="button" className="mini-button" onClick={() => dispatch({ type: "set-step", step: "details" })}>
+          <button
+            type="button"
+            className="mini-button"
+            onClick={() => dispatch({ type: "set-step", step: "details" })}
+            disabled={branch === "huggingface" && isHuggingFaceValidationRunning}
+          >
             Back
           </button>
-          <button type="button" className="primary-button" onClick={() => void handleRunValidation()}>
-            {branch === "huggingface" ? "Run preflight" : "Validate files"}
+          <button
+            type="button"
+            className="primary-button"
+            onClick={handleValidatePrimaryAction}
+            disabled={branch === "huggingface" && isHuggingFaceValidationRunning}
+          >
+            {branch === "huggingface" ? huggingFacePrimaryLabel : "Validate files"}
           </button>
         </>
       );

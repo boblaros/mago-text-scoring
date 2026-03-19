@@ -367,7 +367,6 @@ export function ModelsPage() {
 
           <div className="model-row__topline-meta">
             <div className="model-row__chips">
-              {isSelected ? <span className="status-chip model-row__selected-chip">Selected</span> : null}
               <span className={`status-chip status-chip--${model.is_active ? "available" : "missing"}`}>
                 {model.is_active ? "enabled" : "disabled"}
               </span>
@@ -646,7 +645,6 @@ export function ModelsPage() {
                 {disabledModels.length ? (
                   <div className="model-list__section-header">
                     <span>Active models</span>
-                    <strong>{activeModels.length}</strong>
                   </div>
                 ) : null}
                 <div className="model-list__grid">
@@ -659,7 +657,6 @@ export function ModelsPage() {
               <div className="model-list__section">
                 <div className="model-list__section-header">
                   <span>Disabled models</span>
-                  <strong>{disabledModels.length}</strong>
                 </div>
                 <div className="model-list__grid model-list__grid--disabled">
                   {disabledModels.map((model, index) =>

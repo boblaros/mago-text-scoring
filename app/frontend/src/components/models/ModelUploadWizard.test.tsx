@@ -91,7 +91,13 @@ function buildLocalPreflightResponse(
     config_preview: "model_id: sentiment-demo\nframework:\n  type: transformers\n",
     artifact_checks: [
       { slot: "weights", title: "Weights", required: true, valid: true, files: ["model.safetensors"] },
-      { slot: "tokenizer", title: "Tokenizer Assets", required: true, valid: true, files: ["tokenizer.json"] },
+      {
+        slot: "tokenizer",
+        title: "Tokenizer Assets",
+        required: true,
+        valid: true,
+        files: ["tokenizer.json", "tokenizer_config.json"],
+      },
       { slot: "config", title: "Runtime Config Assets", required: true, valid: true, files: ["config.json"] },
     ],
     dashboard_attached: false,
@@ -202,7 +208,10 @@ async function advanceToLocalValidate(user: ReturnType<typeof userEvent.setup>) 
 
 async function fillLocalFiles(user: ReturnType<typeof userEvent.setup>) {
   await user.upload(screen.getByLabelText("Weights"), new File(["weights"], "model.safetensors"));
-  await user.upload(screen.getByLabelText("Tokenizer Assets"), new File(["{}"], "tokenizer.json"));
+  await user.upload(screen.getByLabelText("Tokenizer Assets"), [
+    new File(["{}"], "tokenizer.json"),
+    new File(["{}"], "tokenizer_config.json"),
+  ]);
   await user.upload(screen.getByLabelText("Runtime Config Assets"), new File(["{}"], "config.json"));
 }
 
@@ -220,7 +229,7 @@ describe("ModelUploadWizard", () => {
     await user.click(screen.getByTestId("upload-source-local"));
 
     expect(screen.getByText("Do you already have a ready upload config file?")).toBeInTheDocument();
-    expect(screen.getByText("Model Name & Task")).toBeInTheDocument();
+    expect(screen.getByText("Model Metadata")).toBeInTheDocument();
     expect(screen.getByText("Model Artifacts")).toBeInTheDocument();
   });
 
@@ -258,7 +267,7 @@ describe("ModelUploadWizard", () => {
       "model-upload-sheet__step--complete",
     );
     expect(
-      screen.getByText("Model Name & Task", { selector: "strong" }).closest("div"),
+      screen.getByText("Model Metadata", { selector: "strong" }).closest("div"),
     ).toHaveClass("model-upload-sheet__step--active");
   });
 
@@ -373,8 +382,78 @@ describe("ModelUploadWizard", () => {
     expect(screen.getByLabelText("Dashboard bundle").closest("label")).not.toHaveClass("artifact-slot--error");
     expect(screen.getByTestId("validate-status")).toHaveClass("model-upload__status--error");
     expect(screen.getByTestId("validate-status")).toHaveTextContent("Validation failed");
-    expect(screen.getByTestId("validate-status")).not.toHaveTextContent("Weights requires at least 1 file.");
+    expect(screen.getByTestId("validate-status")).toHaveTextContent(
+      "Weights must include model.safetensors or pytorch_model.bin.",
+    );
+    expect(screen.getByText("Tokenizer Assets are incomplete. Upload tokenizer_config.json plus tokenizer.json, vocab.txt, tokenizer.model, spiece.model, sentencepiece.bpe.model, or vocab.json with merges.txt.")).toBeInTheDocument();
     expect(screen.queryByText("No files selected.")).not.toBeInTheDocument();
+  });
+
+  it("renders tokenizer upload guidance as grouped minimum file combinations", async () => {
+    const { user } = renderWizard();
+
+    await advanceToLocalValidate(user);
+
+    const tokenizerCard = screen.getByLabelText("Tokenizer Assets").closest("label");
+    expect(tokenizerCard).not.toBeNull();
+
+    const tokenizerCardView = within(tokenizerCard as HTMLLabelElement);
+    expect(
+      tokenizerCardView.getByText("Minimum upload: tokenizer_config.json plus one complete tokenizer source."),
+    ).toBeInTheDocument();
+    expect(tokenizerCardView.getByText("Always include")).toBeInTheDocument();
+    expect(tokenizerCardView.getByText("Add one complete tokenizer source")).toBeInTheDocument();
+    expect(tokenizerCardView.getByText("tokenizer_config.json")).toBeInTheDocument();
+    expect(tokenizerCardView.getByText("tokenizer.json")).toBeInTheDocument();
+    expect(tokenizerCardView.getByText("vocab.json + merges.txt")).toBeInTheDocument();
+  });
+
+  it("rejects non-weight files in the Weights section before local preflight", async () => {
+    const { user } = renderWizard();
+
+    await advanceToLocalValidate(user);
+    await user.upload(screen.getByLabelText("Weights"), new File(["bin"], "training_args.bin"));
+    await user.upload(screen.getByLabelText("Tokenizer Assets"), [
+      new File(["{}"], "tokenizer.json"),
+      new File(["{}"], "tokenizer_config.json"),
+    ]);
+    await user.upload(screen.getByLabelText("Runtime Config Assets"), new File(["{}"], "config.json"));
+    await user.click(screen.getByRole("button", { name: "Validate files" }));
+
+    expect(mockedPreflightLocalUpload).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Weights").closest("label")).toHaveClass("artifact-slot--error");
+    expect(
+      screen.getAllByText(
+        "Weights only accept model.safetensors or pytorch_model.bin for transformer sequence-classification uploads. training_args.bin is not a valid transformer weight file.",
+      ),
+    ).toHaveLength(2);
+    expect(screen.getByTestId("validate-status")).toHaveTextContent(
+      "Weights only accept model.safetensors or pytorch_model.bin for transformer sequence-classification uploads.",
+    );
+  });
+
+  it("rejects incomplete tokenizer bundles before local preflight", async () => {
+    const { user } = renderWizard();
+
+    await advanceToLocalValidate(user);
+    await user.upload(screen.getByLabelText("Weights"), new File(["weights"], "model.safetensors"));
+    await user.upload(
+      screen.getByLabelText("Tokenizer Assets"),
+      new File(["{}"], "tokenizer_config.json"),
+    );
+    await user.upload(screen.getByLabelText("Runtime Config Assets"), new File(["{}"], "config.json"));
+    await user.click(screen.getByRole("button", { name: "Validate files" }));
+
+    expect(mockedPreflightLocalUpload).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Tokenizer Assets").closest("label")).toHaveClass("artifact-slot--error");
+    expect(
+      screen.getAllByText(
+        "Tokenizer Assets are incomplete. Missing one tokenizer definition file (tokenizer.json, vocab.txt, tokenizer.model, spiece.model, sentencepiece.bpe.model, or vocab.json with merges.txt).",
+      ),
+    ).toHaveLength(2);
+    expect(screen.getByTestId("validate-status")).toHaveTextContent(
+      "Tokenizer Assets are incomplete. Missing one tokenizer definition file",
+    );
   });
 
   it("shows clear uploaded file indicators inside artifact cards", async () => {
@@ -386,6 +465,7 @@ describe("ModelUploadWizard", () => {
     expect(screen.queryByText("1 file uploaded")).not.toBeInTheDocument();
     expect(screen.getByText("model.safetensors")).toBeInTheDocument();
     expect(screen.getByText("tokenizer.json")).toBeInTheDocument();
+    expect(screen.getByText("tokenizer_config.json")).toBeInTheDocument();
     expect(screen.getByText("config.json")).toBeInTheDocument();
     expect(screen.getByText("No dashboard bundle uploaded yet")).toBeInTheDocument();
   });
@@ -502,33 +582,6 @@ describe("ModelUploadWizard", () => {
     expect(payload.artifact_manifest.label_map_file?.[0]?.name).toBe("label_mapping.json");
   });
 
-  it("keeps label names raw when raw numbers mode is selected", async () => {
-    mockedPreflightLocalUpload.mockResolvedValue(buildLocalPreflightResponse());
-    const { user } = renderWizard();
-
-    await user.click(screen.getByTestId("upload-source-local"));
-    await user.click(screen.getByTestId("local-config-mode-manual"));
-    await user.type(screen.getByLabelText("Display name"), "Sentiment Demo");
-    await user.type(screen.getByLabelText("Model id"), "sentiment-demo");
-    await user.click(screen.getByTestId("label-input-mode-raw"));
-    await user.click(screen.getByRole("button", { name: "Continue" }));
-
-    await fillLocalFiles(user);
-    await user.click(screen.getByRole("button", { name: "Validate files" }));
-
-    await waitFor(() => expect(mockedPreflightLocalUpload).toHaveBeenCalledTimes(1));
-
-    const formData = mockedPreflightLocalUpload.mock.calls[0]?.[0];
-    const payload = JSON.parse(String((formData as FormData).get("payload"))) as {
-      metadata: UploadModelMetadata;
-    };
-    expect(payload.metadata.labels[0]).toEqual({
-      id: 0,
-      name: "0",
-      display_name: "0",
-    });
-  });
-
   it("supports an optional uploaded config inside the unified local flow", async () => {
     mockedPreflightLocalUpload.mockResolvedValue(
       buildLocalPreflightResponse({ config_source: "uploaded" }),
@@ -606,7 +659,7 @@ describe("ModelUploadWizard", () => {
     await user.type(screen.getByLabelText("Model id"), "hf-demo");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.type(screen.getByTestId("hf-repo-input"), "broken");
-    await user.click(screen.getByRole("button", { name: "Run preflight" }));
+    await user.click(screen.getByRole("button", { name: "Run Preflight" }));
 
     await waitFor(() =>
       expect(
@@ -656,8 +709,13 @@ describe("ModelUploadWizard", () => {
     await user.type(screen.getByLabelText("Model id"), "hf-demo");
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.type(screen.getByTestId("hf-repo-input"), "org/demo-model");
-    await user.click(screen.getByRole("button", { name: "Run preflight" }));
+    await user.click(screen.getByRole("button", { name: "Run Preflight" }));
 
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Final Review" })).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("review-step")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Final Review" }));
     await waitFor(() => expect(screen.getByTestId("review-step")).toBeInTheDocument());
     expect(screen.getByText("org/demo-model")).toBeInTheDocument();
     expect(screen.getByText("Hugging Face")).toBeInTheDocument();

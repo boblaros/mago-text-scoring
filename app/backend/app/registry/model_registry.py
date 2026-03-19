@@ -77,24 +77,24 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             required=True,
             min_files=1,
             max_files=2,
-            allowed_extensions=(".safetensors", ".bin", ".pt", ".pth"),
-            description="Model weights exported for transformers runtime.",
+            allowed_extensions=(".safetensors", ".bin"),
+            description="Transformer weights such as model.safetensors or pytorch_model.bin.",
         ),
         ArtifactRequirement(
             slot="tokenizer",
             required=True,
             min_files=1,
             max_files=None,
-            allowed_extensions=(".json", ".txt", ".model", ".vocab"),
-            description="Tokenizer assets such as tokenizer.json and tokenizer_config.json.",
+            allowed_extensions=(".json", ".txt", ".model"),
+            description="Tokenizer bundle files such as tokenizer.json and tokenizer_config.json.",
         ),
         ArtifactRequirement(
             slot="config",
             required=True,
             min_files=1,
             max_files=None,
-            allowed_extensions=(".json", ".yaml", ".yml", ".bin"),
-            description="Runtime and model config files.",
+            allowed_extensions=(".json",),
+            description="Transformer runtime config.json.",
         ),
         ArtifactRequirement(
             slot="label_map_file",
@@ -189,6 +189,40 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             description="Optional label encoder artifact.",
         ),
     ),
+}
+
+TRANSFORMER_SEQUENCE_WEIGHT_FILENAMES = (
+    "model.safetensors",
+    "pytorch_model.bin",
+)
+TRANSFORMER_SEQUENCE_TOKENIZER_SINGLE_FILE_FILENAMES = (
+    "tokenizer.json",
+    "vocab.txt",
+    "tokenizer.model",
+    "spiece.model",
+    "sentencepiece.bpe.model",
+)
+TRANSFORMER_SEQUENCE_TOKENIZER_PAIR_FILENAMES = (
+    "vocab.json",
+    "merges.txt",
+)
+TRANSFORMER_SEQUENCE_TOKENIZER_OPTIONAL_FILENAMES = (
+    "special_tokens_map.json",
+    "added_tokens.json",
+)
+TRANSFORMER_SEQUENCE_CONFIG_FILENAMES = ("config.json",)
+TRANSFORMER_SEQUENCE_SLOT_LABELS = {
+    "weights": "Weights",
+    "tokenizer": "Tokenizer Assets",
+    "config": "Runtime Config Assets",
+}
+TRANSFORMER_SEQUENCE_FILENAME_TO_SLOT = {
+    **{name: "weights" for name in TRANSFORMER_SEQUENCE_WEIGHT_FILENAMES},
+    **{name: "tokenizer" for name in TRANSFORMER_SEQUENCE_TOKENIZER_SINGLE_FILE_FILENAMES},
+    **{name: "tokenizer" for name in TRANSFORMER_SEQUENCE_TOKENIZER_PAIR_FILENAMES},
+    **{name: "tokenizer" for name in TRANSFORMER_SEQUENCE_TOKENIZER_OPTIONAL_FILENAMES},
+    "tokenizer_config.json": "tokenizer",
+    **{name: "config" for name in TRANSFORMER_SEQUENCE_CONFIG_FILENAMES},
 }
 
 
@@ -376,6 +410,7 @@ class ModelRegistry:
 
         artifact_checks, field_errors = self._artifact_selection_checks(
             metadata.framework_type,
+            metadata.framework_task,
             payload.artifact_manifest,
         )
         warnings.extend(self._dashboard_selection_warnings(payload.dashboard_manifest))
@@ -428,6 +463,7 @@ class ModelRegistry:
             artifact_manifest = _save_artifacts(
                 model_dir=model_dir,
                 framework_type=metadata.framework_type,
+                framework_task=metadata.framework_task,
                 artifact_uploads=artifact_uploads,
             )
             manifest = self._build_manifest(
@@ -957,6 +993,7 @@ class ModelRegistry:
     def _artifact_selection_checks(
         self,
         framework_type: str,
+        framework_task: str,
         artifact_manifest: dict[str, list[UploadFileDescriptor]],
     ) -> tuple[list[ArtifactValidationSummary], dict[str, str]]:
         requirements = ARTIFACT_REQUIREMENTS.get(framework_type)
@@ -977,7 +1014,12 @@ class ModelRegistry:
         for requirement in requirements:
             descriptors = artifact_manifest.get(requirement.slot, [])
             files = [Path(descriptor.name).name for descriptor in descriptors]
-            error = _artifact_requirement_error(framework_type, requirement, files)
+            error = _artifact_requirement_error(
+                framework_type,
+                framework_task,
+                requirement,
+                files,
+            )
             if error is not None:
                 field_errors[f"artifacts.{requirement.slot}"] = error
             summaries.append(
@@ -1276,9 +1318,17 @@ def _normalize_upload_label(label: UploadLabelClass) -> UploadLabelClass:
 
 def _artifact_requirement_error(
     framework_type: str,
+    framework_task: str | None,
     requirement: ArtifactRequirement,
     files: list[str],
 ) -> str | None:
+    if (
+        framework_type == "transformers"
+        and framework_task == "sequence-classification"
+        and requirement.slot in {"weights", "tokenizer", "config"}
+    ):
+        return _transformer_sequence_artifact_error(requirement.slot, files)
+
     if requirement.required and len(files) < requirement.min_files:
         return (
             f"{requirement.title} requires at least {requirement.min_files} file"
@@ -1296,12 +1346,129 @@ def _artifact_requirement_error(
                 f"{', '.join(requirement.allowed_extensions)}."
             )
 
-    normalized_names = {Path(filename).name.lower() for filename in files}
-    if framework_type == "transformers" and requirement.slot == "config":
+    return None
+
+
+def _transformer_sequence_artifact_error(slot: str, files: list[str]) -> str | None:
+    basenames = [Path(filename).name for filename in files]
+    normalized_names = {name.lower() for name in basenames}
+
+    if slot == "weights":
+        if not basenames:
+            return "Weights must include model.safetensors or pytorch_model.bin."
+        invalid_names = [
+            name for name in basenames if name.lower() not in TRANSFORMER_SEQUENCE_WEIGHT_FILENAMES
+        ]
+        if invalid_names:
+            return (
+                "Weights only accept model.safetensors or pytorch_model.bin for transformer "
+                "sequence-classification uploads. "
+                f"{_describe_transformer_sequence_file_issue(invalid_names[0], slot)}"
+            )
+        if len(basenames) > 2:
+            return "Weights accept at most model.safetensors and pytorch_model.bin."
+        return None
+
+    if slot == "config":
+        invalid_names = [
+            name for name in basenames if name.lower() not in TRANSFORMER_SEQUENCE_CONFIG_FILENAMES
+        ]
         if "config.json" not in normalized_names:
-            return "Runtime Config Assets must include config.json for transformer models."
+            if invalid_names:
+                return (
+                    "Runtime Config Assets must include config.json. "
+                    f"{_describe_transformer_sequence_file_issue(invalid_names[0], slot)}"
+                )
+            return "Runtime Config Assets must include config.json."
+        if invalid_names:
+            return (
+                "Runtime Config Assets only accept config.json for transformer "
+                "sequence-classification uploads. "
+                f"{_describe_transformer_sequence_file_issue(invalid_names[0], slot)}"
+            )
+        return None
+
+    if slot == "tokenizer":
+        if not basenames:
+            return (
+                "Tokenizer Assets are incomplete. Upload tokenizer_config.json plus tokenizer.json, "
+                "vocab.txt, tokenizer.model, spiece.model, sentencepiece.bpe.model, or "
+                "vocab.json with merges.txt."
+            )
+
+        allowed_names = {
+            *TRANSFORMER_SEQUENCE_TOKENIZER_SINGLE_FILE_FILENAMES,
+            *TRANSFORMER_SEQUENCE_TOKENIZER_PAIR_FILENAMES,
+            *TRANSFORMER_SEQUENCE_TOKENIZER_OPTIONAL_FILENAMES,
+            "tokenizer_config.json",
+        }
+        invalid_names = [name for name in basenames if name.lower() not in allowed_names]
+        if invalid_names:
+            return (
+                "Tokenizer Assets only accept tokenizer_config.json, tokenizer.json, vocab.txt, "
+                "tokenizer.model, spiece.model, sentencepiece.bpe.model, vocab.json, merges.txt, "
+                "special_tokens_map.json, or added_tokens.json. "
+                f"{_describe_transformer_sequence_file_issue(invalid_names[0], slot)}"
+            )
+
+        missing_parts: list[str] = []
+        has_tokenizer_config = "tokenizer_config.json" in normalized_names
+        has_vocab_json = "vocab.json" in normalized_names
+        has_merges_txt = "merges.txt" in normalized_names
+        has_tokenizer_definition = (
+            bool(
+                normalized_names.intersection(
+                    {
+                        *TRANSFORMER_SEQUENCE_TOKENIZER_SINGLE_FILE_FILENAMES,
+                    }
+                )
+            )
+            or (has_vocab_json and has_merges_txt)
+        )
+
+        if not has_tokenizer_config:
+            missing_parts.append("tokenizer_config.json")
+        if has_vocab_json and not has_merges_txt:
+            missing_parts.append("merges.txt")
+        elif has_merges_txt and not has_vocab_json:
+            missing_parts.append("vocab.json")
+        elif not has_tokenizer_definition:
+            missing_parts.append(
+                "one tokenizer definition file (tokenizer.json, vocab.txt, tokenizer.model, "
+                "spiece.model, sentencepiece.bpe.model, or vocab.json with merges.txt)"
+            )
+
+        if missing_parts:
+            return f"Tokenizer Assets are incomplete. Missing {_format_missing_items(missing_parts)}."
 
     return None
+
+
+def _describe_transformer_sequence_file_issue(filename: str, current_slot: str) -> str:
+    normalized_name = Path(filename).name.lower()
+    expected_slot = TRANSFORMER_SEQUENCE_FILENAME_TO_SLOT.get(normalized_name)
+    if expected_slot and expected_slot != current_slot:
+        return (
+            f"{filename} is misplaced. Move it to "
+            f"{TRANSFORMER_SEQUENCE_SLOT_LABELS[expected_slot]}."
+        )
+
+    if current_slot == "weights":
+        return f"{filename} is not a valid transformer weight file."
+    if current_slot == "config":
+        return f"{filename} is not a supported runtime config file for this slot."
+    if current_slot == "tokenizer":
+        return f"{filename} is not a supported tokenizer asset for this slot."
+    return f"{filename} is not supported in this artifact slot."
+
+
+def _format_missing_items(items: list[str]) -> str:
+    unique_items = list(dict.fromkeys(items))
+    if len(unique_items) == 1:
+        return unique_items[0]
+    if len(unique_items) == 2:
+        return f"{unique_items[0]} and {unique_items[1]}"
+    return f"{', '.join(unique_items[:-1])}, and {unique_items[-1]}"
 
 
 def _planned_artifact_manifest(
@@ -1344,6 +1511,7 @@ def _planned_artifact_manifest(
 def _save_artifacts(
     model_dir: Path,
     framework_type: str,
+    framework_task: str,
     artifact_uploads: list[UploadedPayload],
 ) -> dict[str, object]:
     requirements = ARTIFACT_REQUIREMENTS.get(framework_type)
@@ -1372,6 +1540,7 @@ def _save_artifacts(
         upload_names = [upload.path for upload in uploads]
         requirement_error = _artifact_requirement_error(
             framework_type,
+            framework_task,
             requirement,
             upload_names,
         )

@@ -62,55 +62,30 @@ const HOW_IT_WORKS_STEPS = [
 const MODEL_FLOW_STEPS = [
   {
     id: "01",
-    eyebrow: "Assets",
-    title: "Load files",
-    detail: "Weights, config, tokenizer",
+    eyebrow: "Files",
+    title: "Upload model files",
+    detail: "Model files and settings",
     tone: "setup" as const,
   },
   {
     id: "02",
-    eyebrow: "Metadata",
-    title: "Inspect setup",
-    detail: "Version, lineage, parameters",
+    eyebrow: "Details",
+    title: "Add model details",
+    detail: "Task, labels, and version",
     tone: "gate" as const,
   },
   {
     id: "03",
-    eyebrow: "Checks",
-    title: "Validate readiness",
-    detail: "Run technical review",
+    eyebrow: "Check",
+    title: "Make sure it works",
+    detail: "Confirm the model is ready to use",
     tone: "gate" as const,
   },
   {
     id: "04",
-    eyebrow: "Activation",
-    title: "Approve runtime",
-    detail: "Move module to active",
-    tone: "runtime" as const,
-  },
-  {
-    id: "05",
-    eyebrow: "Home",
-    title: "Use in scoring",
-    detail: "Available in live analysis",
-    tone: "runtime" as const,
-  },
-] as const;
-
-const MODEL_FLOW_SUMMARY = [
-  {
-    label: "Input",
-    value: "Raw model assets",
-    tone: "setup" as const,
-  },
-  {
-    label: "Gate",
-    value: "Validation + activation",
-    tone: "gate" as const,
-  },
-  {
-    label: "Output",
-    value: "Active module in Home",
+    eyebrow: "App",
+    title: "Use the model",
+    detail: "It becomes available in the app",
     tone: "runtime" as const,
   },
 ] as const;
@@ -374,7 +349,7 @@ export function InfoPage({ view }: InfoPageProps) {
           <section className="panel models-panel">
             <div className="models-panel__header">
               <div className="panel__eyebrow">Models</div>
-              <h2>One technical flow from model files to live runtime.</h2>
+              <h2>From uploaded files to a model you can use in the app.</h2>
             </div>
 
             <div className="models-panel__roadmap">
@@ -407,15 +382,6 @@ export function InfoPage({ view }: InfoPageProps) {
 
                 return items;
               })}
-            </div>
-
-            <div className="models-panel__summary">
-              {MODEL_FLOW_SUMMARY.map((item) => (
-                <div key={item.label} className={`models-panel__signal ${getToneClass(item.tone)}`}>
-                  <div className="models-panel__signal-label">{item.label}</div>
-                  <div className="models-panel__signal-value">{item.value}</div>
-                </div>
-              ))}
             </div>
           </section>
 

@@ -577,7 +577,7 @@ def _resolve_dashboard_file(dashboard_dir: Path, file_ref: str) -> Path | None:
 
 def _relative_to_dashboard(dashboard_dir: Path, resolved: Path) -> str:
     try:
-        return resolved.relative_to(dashboard_dir).as_posix()
+        return resolved.resolve().relative_to(dashboard_dir.resolve()).as_posix()
     except ValueError:
         return resolved.name
 

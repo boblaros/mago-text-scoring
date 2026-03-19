@@ -56,7 +56,6 @@ type MetadataRuntimeAccordionItem = {
 type DistributionTableBlock = {
   key: string;
   title: string;
-  eyebrow: string;
   rows: Record<string, unknown>[];
 };
 
@@ -67,7 +66,9 @@ const CHART_SECTION_PRIORITY: Record<string, number> = {
   learning_curves: 3,
   class_distribution: 4,
   cross_dataset: 5,
-  additional_charts: 6,
+  dataset_diagnostics: 6,
+  topic_analysis: 7,
+  additional_charts: 8,
 };
 
 const ARTEFACTS_AND_CHARTS_ORDER: Record<string, number> = {
@@ -80,7 +81,9 @@ const ARTEFACTS_AND_CHARTS_ORDER: Record<string, number> = {
   training_curves: 6,
   learning_curves: 7,
   samples: 8,
-  metadata: 9,
+  dataset_diagnostics: 9,
+  topic_analysis: 10,
+  metadata: 11,
 };
 
 const METADATA_ARTIFACT_ORDER: Record<string, number> = {
@@ -246,6 +249,12 @@ function formatCoverageSectionDescription(section: DashboardSectionSummary) {
   if (section.id === "samples") {
     return "Prediction examples with labels and scores.";
   }
+  if (section.id === "dataset_diagnostics") {
+    return "EDA snapshots and dataset-level diagnostics.";
+  }
+  if (section.id === "topic_analysis") {
+    return "Topic-model and clustering visuals.";
+  }
   if (section.id === "metadata") {
     return "Sources, runtime assets, and diagnostics.";
   }
@@ -349,14 +358,6 @@ function humanizeArtifactStem(value: string) {
   return formatLabel(value.replace(/[-/]/g, "_"));
 }
 
-function distributionEyebrow(path: string, record: Record<string, unknown>) {
-  const firstRow = toRecordArray(record.overall)[0] ?? toRecordArray(record.splits)[0] ?? null;
-  if ((firstRow && "source_dataset" in firstRow) || path.includes("source")) {
-    return "Sources";
-  }
-  return "Classes";
-}
-
 function buildDistributionTables(documents: Record<string, unknown>): DistributionTableBlock[] {
   return Object.entries(documents)
     .filter(([path, value]) => path.startsWith("distributions/") && Boolean(asRecord(value)))
@@ -386,15 +387,13 @@ function buildDistributionTables(documents: Record<string, unknown>): Distributi
       }
 
       const stem = lastPathSegment(path).replace(/\.json$/i, "");
-      const titleBase = humanizeArtifactStem(stem);
-      const eyebrow = distributionEyebrow(path, record);
+      const titleBase = stem.replace(/[-_]/g, " ").trim().toLowerCase();
       const blocks: DistributionTableBlock[] = [];
 
       if (overallRows.length) {
         blocks.push({
           key: `${path}:overall`,
           title: `${titleBase} overview`,
-          eyebrow,
           rows: overallRows,
         });
       }
@@ -403,7 +402,6 @@ function buildDistributionTables(documents: Record<string, unknown>): Distributi
         blocks.push({
           key: `${path}:splits`,
           title: `${titleBase} by split`,
-          eyebrow,
           rows: splitRows,
         });
       }
@@ -869,12 +867,14 @@ function CompactTable({
   rows,
   limit,
   hideHeader = false,
+  variant = "default",
 }: {
   title: string;
-  eyebrow: string;
+  eyebrow?: string;
   rows: Record<string, unknown>[];
   limit?: number;
   hideHeader?: boolean;
+  variant?: "default" | "distribution";
 }) {
   if (!rows.length) {
     return null;
@@ -893,11 +893,15 @@ function CompactTable({
   ).slice(0, 7);
 
   return (
-    <div className="models-dashboard__table-block">
+    <div
+      className={`models-dashboard__table-block${
+        variant === "distribution" ? " models-dashboard__table-block--distribution" : ""
+      }`}
+    >
       {!hideHeader ? (
         <div className="dashboard-block__header">
           <div>
-            <div className="dashboard-block__eyebrow">{eyebrow}</div>
+            {eyebrow ? <div className="dashboard-block__eyebrow">{eyebrow}</div> : null}
             <h4>{title}</h4>
           </div>
         </div>
@@ -1418,13 +1422,13 @@ export function ModelDashboardPanel({
       return;
     }
 
-    if (section.id === "evaluation" || section.id === "benchmark" || section.id === "cross_dataset" || section.id === "samples") {
-      scrollToSection(evaluationRef);
+    if (chartIndicatorById.has(section.id)) {
+      setOpenChartSectionId(section.id);
       return;
     }
 
-    if (chartIndicatorById.has(section.id)) {
-      setOpenChartSectionId(section.id);
+    if (section.id === "evaluation" || section.id === "benchmark" || section.id === "cross_dataset" || section.id === "samples") {
+      scrollToSection(evaluationRef);
     }
   };
 
@@ -1628,7 +1632,6 @@ export function ModelDashboardPanel({
             {distributionTables.length ? (
               <DashboardDetail
                 title="Distribution tables"
-                meta={`${distributionTables.length} view${distributionTables.length === 1 ? "" : "s"}`}
                 className="models-dashboard__detail--evaluation"
               >
                 <div className="models-dashboard__detail-stack">
@@ -1636,8 +1639,8 @@ export function ModelDashboardPanel({
                     <CompactTable
                       key={table.key}
                       title={table.title}
-                      eyebrow={table.eyebrow}
                       rows={table.rows}
+                      variant="distribution"
                     />
                   ))}
                 </div>

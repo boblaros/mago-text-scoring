@@ -445,3 +445,95 @@ def test_load_model_dashboard_recovers_distribution_assets_from_dashboard_bundle
         "class-distribution",
         "source-dataset-distribution",
     }
+
+
+def test_load_model_dashboard_dedupes_manifest_and_discovered_figure_paths(
+    tmp_path: Path,
+) -> None:
+    repo_root = tmp_path
+    app_root = repo_root / "app"
+    model_dir = app_root / "app-models" / "prod-model-demo"
+    dashboard_dir = model_dir / "dashboard"
+
+    _write_model_config(
+        model_dir,
+        {
+            "builder": "generic-v1",
+        },
+    )
+
+    (dashboard_dir / "summary").mkdir(parents=True)
+    (dashboard_dir / "figures").mkdir(parents=True)
+
+    (dashboard_dir / "summary" / "overview.json").write_text(
+        json.dumps({"generated_at": "2026-03-19T10:45:00+00:00"}, indent=2),
+        encoding="utf-8",
+    )
+    (dashboard_dir / "summary" / "source-audit.json").write_text(
+        json.dumps({"artifact_counts": {"figures": 1}}, indent=2),
+        encoding="utf-8",
+    )
+    (dashboard_dir / "figures" / "benchmark-test-f1.plotly.json").write_text(
+        json.dumps(
+            {
+                "data": [
+                    {
+                        "type": "bar",
+                        "x": ["Demo Model"],
+                        "y": [0.81],
+                    }
+                ],
+                "layout": {"title": {"text": "Benchmark Test F1"}},
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = {
+        "schema_version": "1.0.0",
+        "generated_at": "2026-03-19T10:45:00+00:00",
+        "dashboard_root": "app/app-models/prod-model-demo/dashboard",
+        "entrypoints": {
+            "overview": "app/app-models/prod-model-demo/dashboard/summary/overview.json",
+            "source_audit": "app/app-models/prod-model-demo/dashboard/summary/source-audit.json",
+        },
+        "sections": [
+            {
+                "id": "summary",
+                "title": "Summary",
+                "status": "available",
+                "files": [
+                    "app/app-models/prod-model-demo/dashboard/summary/overview.json",
+                    "app/app-models/prod-model-demo/dashboard/summary/source-audit.json",
+                ],
+            },
+            {
+                "id": "benchmark",
+                "title": "Benchmark",
+                "status": "available",
+                "files": [
+                    "app/app-models/prod-model-demo/dashboard/figures/benchmark-test-f1.plotly.json",
+                ],
+                "charts": ["benchmark-test-f1"],
+            },
+        ],
+    }
+    (dashboard_dir / "dashboard-manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    dashboard = load_model_dashboard(
+        _registered_model(model_dir),
+        lambda asset_path: f"/assets/{asset_path}",
+    )
+
+    benchmark_section = next(
+        section for section in (dashboard.manifest.sections if dashboard.manifest else []) if section.id == "benchmark"
+    )
+    assert benchmark_section.files == ["figures/benchmark-test-f1.plotly.json"]
+
+    benchmark_figures = [figure for figure in dashboard.figures if figure.section_id == "benchmark"]
+    assert len(benchmark_figures) == 1
+    assert benchmark_figures[0].id == "benchmark-test-f1"
