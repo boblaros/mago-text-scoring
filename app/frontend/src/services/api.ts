@@ -16,6 +16,16 @@ import type {
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
+function readPositiveIntEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export const LOCAL_UPLOAD_LIMIT_MB = readPositiveIntEnv(
+  import.meta.env.VITE_LOCAL_UPLOAD_LIMIT_MB,
+  512,
+);
+
 function joinApiUrl(path: string): string {
   const normalizedBase = API_BASE_URL.endsWith("/")
     ? API_BASE_URL.slice(0, -1)

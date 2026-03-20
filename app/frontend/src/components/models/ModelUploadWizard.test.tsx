@@ -408,6 +408,21 @@ describe("ModelUploadWizard", () => {
     expect(tokenizerCardView.getByText("vocab.json + merges.txt")).toBeInTheDocument();
   });
 
+  it("shows the configured local upload limit before artifact selection", async () => {
+    const { user } = renderWizard();
+
+    await advanceToLocalValidate(user);
+
+    const uploadLimitNote = screen.getByTestId("local-upload-limit-note");
+    expect(uploadLimitNote).toHaveTextContent("Upload Limits");
+    expect(uploadLimitNote).toHaveTextContent(
+      "Server limit: 512 MB per local import request, including multipart overhead and any dashboard files.",
+    );
+    expect(uploadLimitNote).toHaveTextContent(
+      "For transformer models, upload only the runtime bundle: weights, tokenizer assets, and config.json.",
+    );
+  });
+
   it("rejects non-weight files in the Weights section before local preflight", async () => {
     const { user } = renderWizard();
 
@@ -463,10 +478,33 @@ describe("ModelUploadWizard", () => {
     await fillLocalFiles(user);
 
     expect(screen.queryByText("1 file uploaded")).not.toBeInTheDocument();
-    expect(screen.getByText("model.safetensors")).toBeInTheDocument();
-    expect(screen.getByText("tokenizer.json")).toBeInTheDocument();
-    expect(screen.getByText("tokenizer_config.json")).toBeInTheDocument();
-    expect(screen.getByText("config.json")).toBeInTheDocument();
+    const weightsCard = screen.getByLabelText("Weights").closest("label");
+    const tokenizerCard = screen.getByLabelText("Tokenizer Assets").closest("label");
+    const configCard = screen.getByLabelText("Runtime Config Assets").closest("label");
+
+    expect(weightsCard).not.toBeNull();
+    expect(tokenizerCard).not.toBeNull();
+    expect(configCard).not.toBeNull();
+
+    expect(
+      within(weightsCard as HTMLLabelElement)
+        .getByText("model.safetensors"),
+    ).toBeInTheDocument();
+    expect(
+      within(
+        (tokenizerCard as HTMLLabelElement).querySelector(".artifact-slot__list--selected") as HTMLElement,
+      ).getByText("tokenizer.json"),
+    ).toBeInTheDocument();
+    expect(
+      within(
+        (tokenizerCard as HTMLLabelElement).querySelector(".artifact-slot__list--selected") as HTMLElement,
+      ).getByText("tokenizer_config.json"),
+    ).toBeInTheDocument();
+    expect(
+      within(
+        (configCard as HTMLLabelElement).querySelector(".artifact-slot__list--selected") as HTMLElement,
+      ).getByText("config.json"),
+    ).toBeInTheDocument();
     expect(screen.getByText("No dashboard bundle uploaded yet")).toBeInTheDocument();
   });
 

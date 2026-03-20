@@ -4,6 +4,7 @@ import {
   ApiRequestError,
   importHuggingFaceModel,
   importLocalModel,
+  LOCAL_UPLOAD_LIMIT_MB,
   preflightHuggingFaceImport,
   preflightLocalUpload,
 } from "../../services/api";
@@ -2369,6 +2370,20 @@ export function ModelUploadWizard({
     return (
       <div className="model-upload-sheet__content">
         <div className="model-upload-sheet__section model-upload-sheet__section--artifacts">
+          <div
+            className="inline-alert inline-alert--warning model-upload-sheet__upload-limit-note"
+            data-testid="local-upload-limit-note"
+          >
+            <strong>Upload Limits</strong>
+            <p>
+              Server limit: {LOCAL_UPLOAD_LIMIT_MB} MB per local import request, including multipart
+              overhead and any dashboard files.
+            </p>
+            <p>
+              For transformer models, upload only the runtime bundle: weights, tokenizer assets,
+              and <code>config.json</code>. Training checkpoints usually exceed the limit.
+            </p>
+          </div>
           <div className="model-upload-sheet__grid model-upload-sheet__artifact-grid">
             {visibleArtifactRequirements.map((requirement) => {
               const files = state.artifactFiles[requirement.slot] ?? [];
