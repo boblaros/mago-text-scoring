@@ -1094,6 +1094,8 @@ export function ModelUploadWizard({
   const [optionalDetailsOpen, setOptionalDetailsOpen] = useState(false);
   const [reviewConfigOpen, setReviewConfigOpen] = useState(false);
   const fieldId = (suffix: string) => `${fieldIdPrefix}-${suffix}`;
+  const localUploadTooltip =
+    `Local upload max: ${LOCAL_UPLOAD_LIMIT_MB} MB total. For transformers, upload only weights, tokenizer files, and config.json.`;
   const renderInfoLabel = (label: string, tooltip: string) => (
     <span className="field-shell__label-row">
       <span>{label}</span>
@@ -2370,20 +2372,6 @@ export function ModelUploadWizard({
     return (
       <div className="model-upload-sheet__content">
         <div className="model-upload-sheet__section model-upload-sheet__section--artifacts">
-          <div
-            className="inline-alert inline-alert--warning model-upload-sheet__upload-limit-note"
-            data-testid="local-upload-limit-note"
-          >
-            <strong>Upload Limits</strong>
-            <p>
-              Server limit: {LOCAL_UPLOAD_LIMIT_MB} MB per local import request, including multipart
-              overhead and any dashboard files.
-            </p>
-            <p>
-              For transformer models, upload only the runtime bundle: weights, tokenizer assets,
-              and <code>config.json</code>. Training checkpoints usually exceed the limit.
-            </p>
-          </div>
           <div className="model-upload-sheet__grid model-upload-sheet__artifact-grid">
             {visibleArtifactRequirements.map((requirement) => {
               const files = state.artifactFiles[requirement.slot] ?? [];
@@ -2911,7 +2899,21 @@ export function ModelUploadWizard({
           <header className="model-upload-sheet__header">
             <div>
               {state.step === "details" || state.step === "source" ? null : (
-                <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>
+                <div className="model-upload-sheet__header-title">
+                  <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>
+                  {state.step === "validate" ? (
+                    <span
+                      className="field-info-badge field-info-badge--wide"
+                      tabIndex={0}
+                      role="note"
+                      aria-label={localUploadTooltip}
+                      data-tooltip={localUploadTooltip}
+                      data-testid="model-artifacts-info-badge"
+                    >
+                      i
+                    </span>
+                  ) : null}
+                </div>
               )}
             </div>
             <button type="button" className="mini-button" onClick={closeWizard} disabled={!canClose}>

@@ -408,18 +408,15 @@ describe("ModelUploadWizard", () => {
     expect(tokenizerCardView.getByText("vocab.json + merges.txt")).toBeInTheDocument();
   });
 
-  it("shows the configured local upload limit before artifact selection", async () => {
+  it("shows the local upload limit in the model artifacts info badge", async () => {
     const { user } = renderWizard();
 
     await advanceToLocalValidate(user);
 
-    const uploadLimitNote = screen.getByTestId("local-upload-limit-note");
-    expect(uploadLimitNote).toHaveTextContent("Upload Limits");
-    expect(uploadLimitNote).toHaveTextContent(
-      "Server limit: 512 MB per local import request, including multipart overhead and any dashboard files.",
-    );
-    expect(uploadLimitNote).toHaveTextContent(
-      "For transformer models, upload only the runtime bundle: weights, tokenizer assets, and config.json.",
+    const infoBadge = screen.getByTestId("model-artifacts-info-badge");
+    expect(infoBadge).toHaveAttribute(
+      "aria-label",
+      "Local upload max: 512 MB total. For transformers, upload only weights, tokenizer files, and config.json.",
     );
   });
 

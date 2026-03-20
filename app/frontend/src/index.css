@@ -4469,28 +4469,11 @@ textarea {
   width: 100%;
 }
 
-.model-upload-sheet__upload-limit-note {
-  display: grid;
+.model-upload-sheet__header-title {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
-  padding: 14px 16px;
-}
-
-.model-upload-sheet__upload-limit-note strong {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.model-upload-sheet__upload-limit-note p {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.5;
-}
-
-.model-upload-sheet__upload-limit-note code {
-  font-size: 0.72rem;
+  min-width: 0;
 }
 
 .model-upload-sheet__choice-grid {
