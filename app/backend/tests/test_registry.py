@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import json
+import pickle
+from io import BytesIO
 from pathlib import Path
 
 import pytest
 import yaml
+import numpy as np
+try:
+    import torch
+except ModuleNotFoundError:  # pragma: no cover - depends on test env
+    torch = None
 
 from app.core.settings import Settings
 from app.inference.factory import InferencePluginRegistry
+from app.inference.runners.torch_sequence import EmbeddingMLP
 from app.registry.model_registry import (
     ModelRegistry,
     RegistrationOutcome,
@@ -21,6 +30,55 @@ from app.schemas.models import (
     UploadModelMetadata,
 )
 from app.services.huggingface_import import HuggingFaceInspection, HuggingFaceRepoFile
+
+
+class FakeRunner:
+    def predict(self, text: str):  # pragma: no cover - tiny test stub
+        return {"text": text}
+
+
+class KeywordTransformer:
+    def __init__(self, keyword: str) -> None:
+        self.keyword = keyword
+
+    def transform(self, texts):
+        return np.asarray(
+            [[1.0 if self.keyword in str(text).lower() else 0.0] for text in texts],
+            dtype=float,
+        )
+
+
+class ThresholdEstimator:
+    classes_ = np.asarray([0, 1])
+
+    def predict_proba(self, features):
+        score = float(np.asarray(features)[0][0])
+        if score >= 0.5:
+            return np.asarray([[0.1, 0.9]], dtype=float)
+        return np.asarray([[0.85, 0.15]], dtype=float)
+
+
+class LogisticRegression:
+    classes_ = np.asarray([0, 1])
+
+    def predict_proba(self, features):
+        _ = self.multi_class
+        first_item = features[0]
+        if isinstance(first_item, str):
+            score = 1.0 if "old" in first_item.lower() else 0.0
+        else:
+            score = float(np.asarray(features)[0][0])
+        if score >= 0.5:
+            return np.asarray([[0.2, 0.8]], dtype=float)
+        return np.asarray([[0.7, 0.3]], dtype=float)
+
+
+class SimpleLabelEncoder:
+    def __init__(self, classes: list[str]) -> None:
+        self.classes_ = np.asarray(classes)
+
+    def inverse_transform(self, values):
+        return np.asarray([self.classes_[int(value)] for value in values])
 
 
 def _write_model_manifest(
@@ -208,6 +266,29 @@ def _uploaded_registration_config(**overrides) -> UploadedPayload:
         path="model-config.yaml",
         content=(yaml.safe_dump(manifest, sort_keys=False) + "\n").encode("utf-8"),
     )
+
+
+def _pickle_bytes(value: object) -> bytes:
+    return pickle.dumps(value)
+
+
+def _json_bytes(value: object) -> bytes:
+    return json.dumps(value).encode("utf-8")
+
+
+def _build_torch_embedding_checkpoint(num_classes: int = 2) -> bytes:
+    if torch is None:
+        pytest.skip("torch is not installed in the current test environment.")
+    model = EmbeddingMLP(
+        torch_module=torch,
+        embedding_matrix=np.zeros((8, 4), dtype=np.float32),
+        num_classes=num_classes,
+        hidden_dim=6,
+        dropout=0.0,
+    )
+    buffer = BytesIO()
+    torch.save({"model_state": model.state_dict()}, buffer)
+    return buffer.getvalue()
 
 
 class FakeHuggingFaceService:
@@ -398,7 +479,10 @@ def test_active_catalog_skips_domains_without_active_models(tmp_path: Path) -> N
     assert registry.catalog(active_only=False)[0]["active_model_id"] is None
 
 
-def test_updating_model_activation_switches_home_model(tmp_path: Path) -> None:
+def test_updating_model_activation_switches_home_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _write_model_manifest(
         tmp_path / "prod-model-sentiment-a",
         model_id="sentiment-a",
@@ -417,6 +501,7 @@ def test_updating_model_activation_switches_home_model(tmp_path: Path) -> None:
     )
 
     registry = _build_registry(tmp_path)
+    monkeypatch.setattr(registry, "get_runner", lambda model: FakeRunner())
     snapshot = registry.update_model("sentiment-b", is_active=True)
 
     assert snapshot["active_domains"][0]["active_model_id"] == "sentiment-b"
@@ -912,3 +997,284 @@ def test_huggingface_missing_required_files_are_reported(tmp_path: Path) -> None
     preflight = registry.preflight_huggingface_import(payload)
     assert preflight.ready_to_import is False
     assert any(not item.available for item in preflight.required_files)
+
+
+def test_local_sklearn_upload_can_activate_and_derive_labels_from_encoder(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        metadata=_build_metadata(
+            model_id="complexity-sklearn",
+            domain="complexity",
+            display_name="Complexity Sklearn",
+            enable_on_upload=True,
+            framework_type="sklearn",
+            framework_library="sklearn",
+            architecture="tf-idf-logreg",
+            runtime_device="cpu",
+            runtime_preprocessing="normalize_text",
+            labels=[UploadLabelClass(id=0, name="class_0", display_name="Class 0")],
+        ),
+        framework_type="sklearn",
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="model.pkl", size_bytes=96)],
+            "config": [UploadFileDescriptor(name="vectorizer.pkl", size_bytes=64)],
+            "label_encoder_file": [
+                UploadFileDescriptor(name="label_encoder.pkl", size_bytes=24)
+            ],
+        },
+    )
+
+    preflight = registry.preflight_local_upload(payload, registration_config_uploads=[])
+    assert preflight.ready is True
+    assert preflight.normalized_metadata.framework_type == "sklearn"
+
+    outcome = registry.register_local_upload(
+        payload,
+        artifact_uploads=[
+            UploadedPayload(
+                path="weights/model.pkl",
+                content=_pickle_bytes(ThresholdEstimator()),
+            ),
+            UploadedPayload(
+                path="config/vectorizer.pkl",
+                content=_pickle_bytes(KeywordTransformer("complex")),
+            ),
+            UploadedPayload(
+                path="label_encoder_file/label_encoder.pkl",
+                content=_pickle_bytes(SimpleLabelEncoder(["easy", "complex"])),
+            ),
+        ],
+        dashboard_uploads=[],
+        registration_config_uploads=[],
+    )
+
+    assert outcome.result.is_active is True
+    assert outcome.result.status == "ready"
+    manifest = yaml.safe_load(
+        (tmp_path / "prod-model-complexity" / "model-config.yaml").read_text(encoding="utf-8")
+    )
+    assert manifest["labels"]["classes"] == [
+        {"id": 0, "name": "easy", "display_name": "easy"},
+        {"id": 1, "name": "complex", "display_name": "complex"},
+    ]
+
+    model = registry.get_model("complexity-sklearn")
+    prediction = registry.get_runner(model).predict("This looks complex.")
+    assert prediction.predicted_label == "complex"
+    assert prediction.confidence > 0.5
+
+
+def test_local_sklearn_activation_handles_legacy_logistic_regression_defaults(
+    tmp_path: Path,
+) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        metadata=_build_metadata(
+            model_id="age-logreg-legacy",
+            domain="age",
+            display_name="Age LogReg Legacy",
+            enable_on_upload=True,
+            framework_type="sklearn",
+            framework_library="sklearn",
+            labels=[UploadLabelClass(id=0, name="class_0", display_name="Class 0")],
+        ),
+        framework_type="sklearn",
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="model.pkl", size_bytes=96)],
+            "config": [UploadFileDescriptor(name="feature_config.json", size_bytes=16)],
+            "label_encoder_file": [
+                UploadFileDescriptor(name="label_encoder.pkl", size_bytes=24)
+            ],
+        },
+    )
+
+    outcome = registry.register_local_upload(
+        payload,
+        artifact_uploads=[
+            UploadedPayload(
+                path="weights/model.pkl",
+                content=_pickle_bytes(LogisticRegression()),
+            ),
+            UploadedPayload(path="config/feature_config.json", content=b"{}"),
+            UploadedPayload(
+                path="label_encoder_file/label_encoder.pkl",
+                content=_pickle_bytes(SimpleLabelEncoder(["young", "old"])),
+            ),
+        ],
+        dashboard_uploads=[],
+        registration_config_uploads=[],
+    )
+
+    assert outcome.result.is_active is True
+    assert outcome.result.status == "ready"
+
+
+def test_local_pytorch_upload_can_activate_embedding_mlp(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        metadata=_build_metadata(
+            model_id="complexity-torch",
+            domain="complexity",
+            display_name="Complexity Torch",
+            enable_on_upload=True,
+            framework_type="pytorch",
+            framework_library="torch",
+            architecture="glove_mlp",
+            embeddings="fasttext-wiki-news-subwords-300",
+            runtime_device="cpu",
+            runtime_preprocessing="normalize_text + preprocess_from_normalized",
+            labels=[UploadLabelClass(id=0, name="class_0", display_name="Class 0")],
+            model_config={"hidden_dim": 6, "dropout": 0.0},
+        ),
+        framework_type="pytorch",
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="model.pt", size_bytes=256)],
+            "vocabulary": [UploadFileDescriptor(name="vocab.json", size_bytes=32)],
+            "config": [UploadFileDescriptor(name="config.json", size_bytes=16)],
+            "label_map_file": [UploadFileDescriptor(name="class2id.json", size_bytes=24)],
+        },
+    )
+
+    outcome = registry.register_local_upload(
+        payload,
+        artifact_uploads=[
+            UploadedPayload(
+                path="weights/model.pt",
+                content=_build_torch_embedding_checkpoint(),
+            ),
+            UploadedPayload(
+                path="vocabulary/vocab.json",
+                content=_json_bytes(
+                    {
+                        "<PAD>": 0,
+                        "<UNK>": 1,
+                        "registry": 2,
+                        "activation": 3,
+                        "smoke": 4,
+                        "test": 5,
+                    }
+                ),
+            ),
+            UploadedPayload(path="config/config.json", content=b"{}"),
+            UploadedPayload(
+                path="label_map_file/class2id.json",
+                content=_json_bytes({"negative": 0, "positive": 1}),
+            ),
+        ],
+        dashboard_uploads=[],
+        registration_config_uploads=[],
+    )
+
+    assert outcome.result.is_active is True
+    assert outcome.result.status == "ready"
+    manifest = yaml.safe_load(
+        (tmp_path / "prod-model-complexity" / "model-config.yaml").read_text(encoding="utf-8")
+    )
+    assert manifest["framework"]["architecture"] == "embedding-mlp"
+    assert manifest["labels"]["classes"] == [
+        {"id": 0, "name": "negative", "display_name": "negative"},
+        {"id": 1, "name": "positive", "display_name": "positive"},
+    ]
+
+    model = registry.get_model("complexity-torch")
+    prediction = registry.get_runner(model).predict("Registry activation smoke test.")
+    assert prediction.predicted_label in {"negative", "positive"}
+    assert prediction.confidence > 0
+
+
+def test_preflight_rejects_unsupported_preprocessing_for_sklearn(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        metadata=_build_metadata(
+            model_id="invalid-sklearn",
+            framework_type="sklearn",
+            framework_library="sklearn",
+            runtime_preprocessing="normalize_text + texts_to_sequences",
+        ),
+        framework_type="sklearn",
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="model.pkl", size_bytes=64)],
+            "config": [UploadFileDescriptor(name="feature_config.json", size_bytes=16)],
+        },
+    )
+
+    with pytest.raises(RegistryValidationError) as exc_info:
+        registry.preflight_local_upload(payload, registration_config_uploads=[])
+
+    assert exc_info.value.field_errors["metadata.runtime_preprocessing"].startswith(
+        "Unsupported preprocessing steps for the selected model type"
+    )
+
+
+def test_local_import_rejects_unsupported_artifact_slot_for_sklearn(tmp_path: Path) -> None:
+    registry = _build_registry(tmp_path)
+    payload = _build_local_payload(
+        metadata=_build_metadata(
+            model_id="sklearn-slot-check",
+            framework_type="sklearn",
+            framework_library="sklearn",
+        ),
+        framework_type="sklearn",
+        artifact_manifest={
+            "weights": [UploadFileDescriptor(name="model.pkl", size_bytes=64)],
+            "config": [UploadFileDescriptor(name="feature_config.json", size_bytes=16)],
+            "tokenizer": [UploadFileDescriptor(name="tokenizer.json", size_bytes=8)],
+        },
+    )
+
+    with pytest.raises(RegistryValidationError) as exc_info:
+        registry.register_local_upload(
+            payload,
+            artifact_uploads=[
+                UploadedPayload(path="weights/model.pkl", content=_pickle_bytes(ThresholdEstimator())),
+                UploadedPayload(path="config/feature_config.json", content=b"{}"),
+                UploadedPayload(path="tokenizer/tokenizer.json", content=b"{}"),
+            ],
+            dashboard_uploads=[],
+            registration_config_uploads=[],
+        )
+
+    assert exc_info.value.field_errors["artifacts.tokenizer"] == (
+        "This artifact slot is not used for the selected model type."
+    )
+
+
+def test_catalog_marks_unsupported_pytorch_architecture_incompatible(tmp_path: Path) -> None:
+    model_dir = tmp_path / "prod-model-complexity"
+    model_dir.mkdir()
+    (model_dir / "model-config.yaml").write_text(
+        """
+model_id: "torch-unsupported"
+domain: "complexity"
+display_name: "Unsupported Torch"
+is_active: false
+priority: 9
+framework:
+  type: "pytorch"
+  task: "sequence-classification"
+  library: "torch"
+  architecture: "capsule-net"
+artifacts:
+  weights:
+    - "model.pt"
+  vocabulary:
+    - "vocab.json"
+  config:
+    - "config.json"
+labels:
+  type: "single-label-classification"
+  classes:
+    - id: 0
+      name: "negative"
+""",
+        encoding="utf-8",
+    )
+    (model_dir / "model.pt").write_bytes(b"weights")
+    (model_dir / "vocab.json").write_text('{"<PAD>": 0, "<UNK>": 1}', encoding="utf-8")
+    (model_dir / "config.json").write_text("{}", encoding="utf-8")
+
+    registry = _build_registry(tmp_path)
+    catalog_model = registry.catalog(active_only=False)[0]["models"][0]
+
+    assert catalog_model["status"] == "incompatible"
+    assert "Unsupported PyTorch architecture 'capsule-net'" in str(catalog_model["status_reason"])

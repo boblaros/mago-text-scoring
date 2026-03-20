@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from app.inference.base import BaseModelRunner
-from app.inference.runners.torch_sequence import TorchBiLSTMAttentionRunner
+from app.inference.runners.sklearn import SklearnSequenceClassifierRunner
+from app.inference.runners.torch_sequence import TorchSequenceClassifierRunner
 from app.inference.runners.transformers import TransformersSequenceClassifierRunner
 from app.registry.contracts import RegisteredModel
 
@@ -30,10 +31,16 @@ class InferencePluginRegistry:
             TransformersSequenceClassifierRunner,
         )
         self.register(
-            "torch-bilstm-attention",
+            "sklearn-sequence-classification",
+            lambda model: model.manifest.framework.type == "sklearn"
+            and model.manifest.framework.task == "sequence-classification",
+            SklearnSequenceClassifierRunner,
+        )
+        self.register(
+            "torch-sequence-classification",
             lambda model: model.manifest.framework.type == "pytorch"
-            and (model.manifest.framework.architecture or "").lower() == "bilstm-attention",
-            TorchBiLSTMAttentionRunner,
+            and model.manifest.framework.task == "sequence-classification",
+            TorchSequenceClassifierRunner,
         )
 
     def register(

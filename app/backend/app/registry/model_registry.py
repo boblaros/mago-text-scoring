@@ -12,8 +12,10 @@ from typing import Any, Iterable
 import yaml
 
 from app.inference.factory import InferencePluginRegistry
+from app.inference.preprocessing import parse_preprocessing_spec
+from app.inference.runtime_support import derive_manifest_labels
 from app.registry.artifacts import resolve_artifacts
-from app.registry.contracts import ModelManifest, RegisteredModel
+from app.registry.contracts import LabelClass, ModelManifest, RegisteredModel
 from app.registry.dashboard_loader import load_model_dashboard, summarize_dashboard
 from app.schemas.models import (
     ArtifactValidationSummary,
@@ -101,7 +103,7 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             required=False,
             min_files=0,
             max_files=1,
-            allowed_extensions=(".json", ".pkl"),
+            allowed_extensions=(".json", ".joblib", ".pkl"),
             description="Optional label encoder or label map artifact.",
         ),
         ArtifactRequirement(
@@ -109,7 +111,7 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             required=False,
             min_files=0,
             max_files=1,
-            allowed_extensions=(".json", ".pkl"),
+            allowed_extensions=(".json", ".joblib", ".pkl"),
             description="Optional exported label classes.",
         ),
     ),
@@ -121,6 +123,14 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             max_files=2,
             allowed_extensions=(".pt", ".pth", ".bin"),
             description="Checkpoint or weight file for the PyTorch model.",
+        ),
+        ArtifactRequirement(
+            slot="label_map_file",
+            required=False,
+            min_files=0,
+            max_files=1,
+            allowed_extensions=(".json", ".joblib", ".pkl"),
+            description="Optional label-id mapping artifact for runtime decoding.",
         ),
         ArtifactRequirement(
             slot="vocabulary",
@@ -135,7 +145,7 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             required=True,
             min_files=1,
             max_files=None,
-            allowed_extensions=(".json", ".yaml", ".yml", ".bin"),
+            allowed_extensions=(".bin", ".joblib", ".json", ".pkl", ".txt", ".yaml", ".yml"),
             description="Model and runtime config files.",
         ),
         ArtifactRequirement(
@@ -143,7 +153,7 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             required=False,
             min_files=0,
             max_files=1,
-            allowed_extensions=(".json", ".pkl"),
+            allowed_extensions=(".json", ".joblib", ".pkl"),
             description="Optional label classes artifact.",
         ),
         ArtifactRequirement(
@@ -151,7 +161,7 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             required=False,
             min_files=0,
             max_files=1,
-            allowed_extensions=(".json", ".pkl"),
+            allowed_extensions=(".json", ".joblib", ".pkl"),
             description="Optional label encoder artifact.",
         ),
     ),
@@ -165,11 +175,19 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             description="Serialized classical model artifact.",
         ),
         ArtifactRequirement(
+            slot="label_map_file",
+            required=False,
+            min_files=0,
+            max_files=1,
+            allowed_extensions=(".json", ".joblib", ".pkl"),
+            description="Optional class mapping artifact for runtime decoding.",
+        ),
+        ArtifactRequirement(
             slot="config",
             required=True,
             min_files=1,
             max_files=None,
-            allowed_extensions=(".json", ".yaml", ".yml", ".txt"),
+            allowed_extensions=(".joblib", ".json", ".pkl", ".txt", ".yaml", ".yml"),
             description="Feature extraction or runtime config.",
         ),
         ArtifactRequirement(
@@ -177,7 +195,7 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             required=False,
             min_files=0,
             max_files=1,
-            allowed_extensions=(".json", ".pkl"),
+            allowed_extensions=(".json", ".joblib", ".pkl"),
             description="Optional label classes artifact.",
         ),
         ArtifactRequirement(
@@ -185,7 +203,7 @@ ARTIFACT_REQUIREMENTS: dict[str, tuple[ArtifactRequirement, ...]] = {
             required=False,
             min_files=0,
             max_files=1,
-            allowed_extensions=(".json", ".pkl"),
+            allowed_extensions=(".json", ".joblib", ".pkl"),
             description="Optional label encoder artifact.",
         ),
     ),
@@ -224,6 +242,38 @@ TRANSFORMER_SEQUENCE_FILENAME_TO_SLOT = {
     "tokenizer_config.json": "tokenizer",
     **{name: "config" for name in TRANSFORMER_SEQUENCE_CONFIG_FILENAMES},
 }
+SUPPORTED_PREPROCESSING_STEPS_BY_FRAMEWORK: dict[str, set[str]] = {
+    "transformers": {"normalize_text"},
+    "pytorch": {
+        "normalize_text",
+        "preprocess_from_normalized",
+        "preprocess_sequence_text",
+        "texts_to_sequences",
+    },
+    "sklearn": {
+        "normalize_text",
+        "preprocess_from_normalized",
+    },
+}
+TORCH_ARCHITECTURE_ALIASES = {
+    "bilstm": "bilstm-attention",
+    "bilstm-attention": "bilstm-attention",
+    "bilstm_attention": "bilstm-attention",
+    "glove-bilstm": "bilstm-attention",
+    "glove_bilstm": "bilstm-attention",
+    "cnn": "text-cnn",
+    "glove-cnn": "text-cnn",
+    "glove_cnn": "text-cnn",
+    "text-cnn": "text-cnn",
+    "text_cnn": "text-cnn",
+    "textcnn": "text-cnn",
+    "embedding-mlp": "embedding-mlp",
+    "embedding_mlp": "embedding-mlp",
+    "glove-mlp": "embedding-mlp",
+    "glove_mlp": "embedding-mlp",
+    "mlp": "embedding-mlp",
+}
+SUPPORTED_TORCH_ARCHITECTURES = set(TORCH_ARCHITECTURE_ALIASES.values())
 
 
 class ModelRegistry:
@@ -354,7 +404,10 @@ class ModelRegistry:
 
         if is_active is not None and is_active != model.manifest.is_active:
             if is_active:
-                _, can_activate, reason = self._model_runtime_status(model)
+                _, can_activate, reason = self._model_runtime_status(
+                    model,
+                    perform_load_check=True,
+                )
                 if not can_activate:
                     raise ValueError(reason or "The model cannot be activated.")
                 self._deactivate_domain_models(model.canonical_domain, except_model_id=model_id)
@@ -471,6 +524,18 @@ class ModelRegistry:
                 canonical_domain=canonical_domain,
                 artifact_manifest=artifact_manifest,
             )
+            resolved_artifacts = resolve_artifacts(model_dir, manifest)
+            derived_labels = derive_manifest_labels(
+                label_classes_path=resolved_artifacts.label_classes_file,
+                label_map_path=resolved_artifacts.label_map_file,
+                label_encoder_path=resolved_artifacts.label_encoder_file,
+            )
+            if derived_labels and _manifest_labels_are_placeholder(manifest.labels or []):
+                manifest.label_type = manifest.label_type or "single-label-classification"
+                manifest.labels = [
+                    LabelClass.model_validate(label)
+                    for label in derived_labels
+                ]
 
             self._write_manifest(model_dir / "model-config.yaml", manifest)
             if dashboard_uploads:
@@ -481,9 +546,12 @@ class ModelRegistry:
                 config_path=model_dir / "model-config.yaml",
                 model_dir=model_dir,
                 canonical_domain=canonical_domain,
-                artifact_resolution=resolve_artifacts(model_dir, manifest),
+                artifact_resolution=resolved_artifacts,
             )
-            _, can_activate, reason = self._model_runtime_status(registered)
+            _, can_activate, reason = self._model_runtime_status(
+                registered,
+                perform_load_check=metadata.enable_on_upload,
+            )
             if metadata.enable_on_upload and not can_activate:
                 raise RegistryValidationError(
                     reason or "The uploaded model cannot be activated.",
@@ -614,7 +682,10 @@ class ModelRegistry:
                 canonical_domain=canonical_domain,
                 artifact_resolution=resolve_artifacts(model_dir, manifest),
             )
-            _, can_activate, reason = self._model_runtime_status(registered)
+            _, can_activate, reason = self._model_runtime_status(
+                registered,
+                perform_load_check=metadata.enable_on_upload,
+            )
             if metadata.enable_on_upload and not can_activate:
                 raise RegistryValidationError(
                     reason or "The imported model cannot be activated.",
@@ -972,16 +1043,52 @@ class ModelRegistry:
             metadata.framework_type
         )
         canonical_domain = self._canonicalize_domain(metadata.domain)
-        return metadata.model_copy(
+        normalized_architecture = metadata.architecture
+        if metadata.framework_type == "pytorch":
+            normalized_architecture = _normalize_torch_architecture(metadata.architecture)
+        normalized = metadata.model_copy(
             update={
                 "domain": canonical_domain,
                 "framework_library": framework_library,
+                "architecture": normalized_architecture,
                 "ui_display_name": metadata.ui_display_name or canonical_domain.title(),
                 "color_token": metadata.color_token or canonical_domain,
                 "group": metadata.group or f"{canonical_domain}-custom",
+                "runtime_preprocessing": metadata.runtime_preprocessing or None,
                 "labels": [_normalize_upload_label(label) for label in metadata.labels],
             }
         )
+        self._validate_runtime_preprocessing(
+            normalized.framework_type,
+            normalized.runtime_preprocessing,
+        )
+        return normalized
+
+    def _validate_runtime_preprocessing(
+        self,
+        framework_type: str,
+        runtime_preprocessing: str | None,
+    ) -> None:
+        if not runtime_preprocessing:
+            return
+
+        allowed_steps = SUPPORTED_PREPROCESSING_STEPS_BY_FRAMEWORK.get(framework_type)
+        if allowed_steps is None:
+            return
+
+        steps = parse_preprocessing_spec(runtime_preprocessing)
+        invalid_steps = [step for step in steps if step not in allowed_steps]
+        if invalid_steps:
+            raise RegistryValidationError(
+                "The selected model type does not support this preprocessing pipeline.",
+                field_errors={
+                    "metadata.runtime_preprocessing": (
+                        "Unsupported preprocessing steps for the selected model type: "
+                        + ", ".join(invalid_steps)
+                        + "."
+                    )
+                },
+            )
 
     def _ensure_model_id_available(self, model_id: str) -> None:
         if any(existing.manifest.model_id == model_id for existing in self.get_models()):
@@ -1156,6 +1263,7 @@ class ModelRegistry:
         model: RegisteredModel,
         *,
         missing_artifacts: list[str] | None = None,
+        perform_load_check: bool = False,
     ) -> tuple[str, bool, str | None]:
         effective_missing_artifacts = missing_artifacts or self._missing_runtime_artifacts(model)
         if effective_missing_artifacts:
@@ -1165,8 +1273,26 @@ class ModelRegistry:
                 f"{len(effective_missing_artifacts)} required runtime artifact(s) missing.",
             )
 
+        framework = model.manifest.framework
+        if framework.type == "pytorch" and framework.task == "sequence-classification":
+            declared_architecture = _declared_torch_architecture(model)
+            if not declared_architecture:
+                return (
+                    "incompatible",
+                    False,
+                    "No supported PyTorch architecture was declared. "
+                    "Use embedding-mlp, text-cnn, or bilstm-attention.",
+                )
+            if declared_architecture not in SUPPORTED_TORCH_ARCHITECTURES:
+                return (
+                    "incompatible",
+                    False,
+                    "Unsupported PyTorch architecture '"
+                    + declared_architecture
+                    + "'. Supported architectures are embedding-mlp, text-cnn, and bilstm-attention.",
+                )
+
         if not self._plugin_registry.supports(model):
-            framework = model.manifest.framework
             return (
                 "incompatible",
                 False,
@@ -1174,6 +1300,17 @@ class ModelRegistry:
                 f"{framework.type}/{framework.task or 'unknown'}"
                 f"{' (' + framework.architecture + ')' if framework.architecture else ''}.",
             )
+
+        if perform_load_check:
+            try:
+                runner = self.get_runner(model)
+                runner.predict("Registry activation smoke test.")
+            except Exception as exc:
+                return (
+                    "incompatible",
+                    False,
+                    f"Runtime smoke test failed: {exc}",
+                )
 
         return ("ready", True, None)
 
@@ -1194,7 +1331,7 @@ class ModelRegistry:
 
     def _runtime_requirements(self, model: RegisteredModel) -> tuple[ArtifactRequirement, ...]:
         framework = model.manifest.framework
-        architecture = (framework.architecture or "").lower()
+        architecture = _declared_torch_architecture(model)
 
         if framework.type == "transformers" and framework.task == "sequence-classification":
             return tuple(
@@ -1208,6 +1345,20 @@ class ModelRegistry:
                 requirement
                 for requirement in ARTIFACT_REQUIREMENTS["pytorch"]
                 if requirement.slot in {"weights", "vocabulary"}
+            )
+
+        if framework.type == "pytorch" and framework.task == "sequence-classification":
+            return tuple(
+                requirement
+                for requirement in ARTIFACT_REQUIREMENTS["pytorch"]
+                if requirement.slot in {"weights", "vocabulary"}
+            )
+
+        if framework.type == "sklearn" and framework.task == "sequence-classification":
+            return tuple(
+                requirement
+                for requirement in ARTIFACT_REQUIREMENTS["sklearn"]
+                if requirement.slot == "weights"
             )
 
         return (
@@ -1300,6 +1451,13 @@ def _prefer_manifest_value(current: Any, default: Any, candidate: Any) -> Any:
 
 
 def _labels_are_placeholder(labels: list[UploadLabelClass]) -> bool:
+    if len(labels) != 1:
+        return False
+    label = labels[0]
+    return label.id == 0 and label.name == "class_0"
+
+
+def _manifest_labels_are_placeholder(labels: list[LabelClass]) -> bool:
     if len(labels) != 1:
         return False
     label = labels[0]
@@ -1525,6 +1683,7 @@ def _save_artifacts(
 
     errors: list[str] = []
     field_errors: dict[str, str] = {}
+    supported_slots = {requirement.slot for requirement in requirements}
     artifact_manifest: dict[str, object] = {
         "weights": [],
         "tokenizer": [],
@@ -1534,6 +1693,13 @@ def _save_artifacts(
         "label_classes_file": None,
         "label_encoder_file": None,
     }
+
+    for slot in grouped:
+        if slot in supported_slots:
+            continue
+        message = "This artifact slot is not used for the selected model type."
+        errors.append(message)
+        field_errors[f"artifacts.{slot}"] = message
 
     for requirement in requirements:
         uploads = grouped.get(requirement.slot, [])
@@ -1721,3 +1887,28 @@ def _unique_name(existing: set[str], filename: str) -> str:
 
 def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
+def _normalize_architecture_name(value: str | None) -> str:
+    return str(value or "").strip().lower().replace(" ", "-").replace("_", "-")
+
+
+def _normalize_torch_architecture(value: str | None) -> str | None:
+    normalized = _normalize_architecture_name(value)
+    if not normalized:
+        return None
+    return TORCH_ARCHITECTURE_ALIASES.get(normalized, normalized)
+
+
+def _declared_torch_architecture(model: RegisteredModel) -> str | None:
+    candidates = (
+        model.manifest.framework.architecture,
+        str(model.manifest.model.get("architecture") or ""),
+        str(model.manifest.model.get("family_slug") or ""),
+        str(model.manifest.model.get("model_family") or ""),
+    )
+    for candidate in candidates:
+        normalized = _normalize_torch_architecture(candidate)
+        if normalized:
+            return normalized
+    return None

@@ -25,7 +25,8 @@ The backend is not hardcoded to those four domains. It scans manifests, groups m
 - Artifact paths are resolved defensively: the loader tolerates manifests that still reference nested export paths while the actual folder is flattened.
 - One domain can expose multiple model definitions.
 - The active model is picked by `is_active` and `priority`, so a future admin/settings UI can switch models without changing inference code.
-- Inference backends are plugin-based: the current build ships a Hugging Face sequence-classification runner and a PyTorch BiLSTM+attention runner.
+- Inference backends are plugin-based: the current build ships local/runtime support for Hugging Face Transformers sequence classification, sklearn/classical ML sequence classification, and PyTorch text sequence classification (embedding MLP, TextCNN, and BiLSTM+attention).
+- The upload wizard and local import flow normalize manifests and artifacts for `transformers`, `sklearn`, and `pytorch`, then surface activation readiness through the registry and management catalog.
 
 ## Dashboard builder
 
@@ -56,6 +57,7 @@ Use `.env.example` only if you want to override defaults such as ports, preload 
 
 ## Notes
 
+- The complexity domain demonstrates both classical ML (`sklearn`) and deep learning (`pytorch`) manifests under the same registry flow.
 - The complexity model uses a custom BiLSTM + additive attention runner reconstructed from the repository's training code.
 - The shipped abuse manifest is canonicalized from `abuse-detection` to `abuse` so it participates in the shared UI lane model.
 - The frontend always renders the lane architecture, even before the live registry finishes loading, so the UI remains stable during startup.

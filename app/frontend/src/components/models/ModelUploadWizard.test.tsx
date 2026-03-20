@@ -310,6 +310,24 @@ describe("ModelUploadWizard", () => {
     expect(screen.getAllByText("Labels")).toHaveLength(1);
   });
 
+  it("switches local artifact slots when the model type changes", async () => {
+    const { user } = renderWizard();
+
+    await user.click(screen.getByTestId("upload-source-local"));
+    await user.click(screen.getByTestId("local-config-mode-manual"));
+    await user.type(screen.getByLabelText("Display name"), "Complexity Demo");
+    await user.type(screen.getByLabelText("Model id"), "complexity-demo");
+    await user.selectOptions(screen.getByLabelText("Model type"), "sklearn");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(screen.getByLabelText("Serialized Model")).toBeInTheDocument();
+    expect(screen.getByLabelText("Feature / Runtime Config")).toBeInTheDocument();
+    expect(screen.getByLabelText("Label Map")).toBeInTheDocument();
+    expect(screen.getByLabelText("Label Classes")).toBeInTheDocument();
+    expect(screen.getByLabelText("Label Encoder")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Tokenizer Assets")).not.toBeInTheDocument();
+  });
+
   it("runs local validation and reaches the review step", async () => {
     mockedPreflightLocalUpload.mockResolvedValue(buildLocalPreflightResponse());
     const { user } = renderWizard();
@@ -416,7 +434,7 @@ describe("ModelUploadWizard", () => {
     const infoBadge = screen.getByTestId("model-artifacts-info-badge");
     expect(infoBadge).toHaveAttribute(
       "aria-label",
-      "Max local upload: 512 MB. For transformers, send weights, tokenizer files, and config.json only.",
+      "Max local upload: 512 MB. Use the artifact slots shown for the selected model type.",
     );
   });
 
@@ -512,7 +530,7 @@ describe("ModelUploadWizard", () => {
 
     expect(screen.queryByText("No files selected.")).not.toBeInTheDocument();
     expect(screen.queryByText("No dashboard bundle selected.")).not.toBeInTheDocument();
-    expect(screen.getAllByText("No files uploaded yet")).toHaveLength(3);
+    expect(screen.getAllByText("No files uploaded yet")).toHaveLength(5);
   });
 
   it("resets the wizard scroll position when moving to model artifacts upload", async () => {
@@ -596,8 +614,8 @@ describe("ModelUploadWizard", () => {
     await waitFor(() => expect(screen.getByText("Negative")).toBeInTheDocument());
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
-    expect(screen.queryByText("Label Map")).not.toBeInTheDocument();
-    expect(screen.queryByText("Label Classes")).not.toBeInTheDocument();
+    expect(screen.getByText("Label Map")).toBeInTheDocument();
+    expect(screen.getByText("Label Classes")).toBeInTheDocument();
     expect(screen.getByText("Dashboard Bundle")).toBeInTheDocument();
 
     await fillLocalFiles(user);

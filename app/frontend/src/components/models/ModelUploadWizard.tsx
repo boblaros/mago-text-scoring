@@ -503,12 +503,21 @@ function wizardReducer(state: WizardState, action: WizardAction): WizardState {
         ...nextState.metadata,
         [action.key]: action.value,
       } as WizardMetadataDraft;
+      let nextArtifactFiles = nextState.artifactFiles;
       if (action.key === "framework_type") {
-        nextMetadata.framework_library = frameworkLibraryDefault(action.value as FrameworkType);
+        const nextFramework = action.value as FrameworkType;
+        nextMetadata.framework_library = frameworkLibraryDefault(nextFramework);
+        const supportedSlots = new Set(
+          ARTIFACT_REQUIREMENTS[nextFramework].map((requirement) => requirement.slot),
+        );
+        nextArtifactFiles = Object.fromEntries(
+          Object.entries(nextState.artifactFiles).filter(([slot]) => supportedSlots.has(slot)),
+        );
       }
       return {
         ...nextState,
         metadata: nextMetadata,
+        artifactFiles: nextArtifactFiles,
       };
     }
     case "patch-metadata":
@@ -682,6 +691,10 @@ function mapApiFieldErrors(error: unknown): Record<string, string> {
       mapped.local_config_mode = value;
     } else if (key === "metadata.framework_type") {
       mapped.framework_type = value;
+    } else if (key === "metadata.runtime_preprocessing") {
+      mapped.runtime_preprocessing = value;
+    } else if (key === "metadata.enable_on_upload") {
+      mapped.enable_on_upload = value;
     } else if (key === "huggingface.repo") {
       mapped.hf_repo = value;
     } else {
@@ -696,8 +709,7 @@ function validateDetailsStep(
   domains: DomainChoice[],
 ): Record<string, string> {
   const errors: Record<string, string> = {};
-  const canUploadLabelMapFile =
-    state.source === "local" && state.metadata.framework_type === "transformers";
+  const canUploadLabelMapFile = state.source === "local";
   if (state.source === "local") {
     if (state.localConfigMode === "unknown") {
       errors.local_config_mode = "Choose whether you already have a ready upload config.";
@@ -1079,13 +1091,9 @@ export function ModelUploadWizard({
   const domainChoice = resolveDomainChoice(state, domains);
   const currentMetadata = useMemo(() => getCurrentMetadata(state, domains), [state, domains]);
   const currentFramework = state.metadata.framework_type;
-  const canUploadLabelMapFile = branch === "local" && currentFramework === "transformers";
+  const canUploadLabelMapFile = branch === "local";
   const visibleArtifactRequirements = useMemo(
-    () =>
-      ARTIFACT_REQUIREMENTS[currentFramework].filter(
-        (requirement) =>
-          requirement.slot !== "label_map_file" && requirement.slot !== "label_classes_file",
-      ),
+    () => ARTIFACT_REQUIREMENTS[currentFramework],
     [currentFramework],
   );
   const mainPanelRef = useRef<HTMLDivElement | null>(null);
@@ -1095,7 +1103,7 @@ export function ModelUploadWizard({
   const [reviewConfigOpen, setReviewConfigOpen] = useState(false);
   const fieldId = (suffix: string) => `${fieldIdPrefix}-${suffix}`;
   const localUploadTooltip =
-    `Max local upload: ${LOCAL_UPLOAD_LIMIT_MB} MB. For transformers, send weights, tokenizer files, and config.json only.`;
+    `Max local upload: ${LOCAL_UPLOAD_LIMIT_MB} MB. Use the artifact slots shown for the selected model type.`;
   const renderInfoLabel = (label: string, tooltip: string) => (
     <span className="field-shell__label-row">
       <span>{label}</span>
@@ -1782,11 +1790,6 @@ export function ModelUploadWizard({
           >
             <span className="field-shell__label-row">
               <span>Model type</span>
-              {state.metadata.framework_type !== "transformers"
-                ? renderWarningBadge(
-                    "You can upload this model, but it will not be runtime-compatible yet. Only transformer-based encoder models are currently supported for activation and live analysis.",
-                  )
-                : null}
             </span>
             <select
               id={fieldId("framework-type")}
@@ -1852,13 +1855,13 @@ export function ModelUploadWizard({
                 <label htmlFor={fieldId("runtime-label-map-file")} className="field-shell__nested-control">
                   {renderInfoLabel(
                     "Label map file",
-                    "Upload a JSON label map to prefill names, or keep a PKL file as an artifact for runtime use.",
+                    "Upload a JSON label map to prefill names, or keep a PKL/JOBLIB file as an artifact for runtime use.",
                   )}
                   <input
                     id={fieldId("runtime-label-map-file")}
                     aria-label="Label map file"
                     type="file"
-                    accept=".json,.pkl"
+                    accept=".json,.joblib,.pkl"
                     multiple={false}
                     onChange={(event) =>
                       void handleLabelMapFilesChange(Array.from(event.target.files ?? []))
@@ -1867,7 +1870,7 @@ export function ModelUploadWizard({
                 </label>
                 <small>
                   {fieldErrorFor(state, "artifacts.label_map_file")
-                    ?? "JSON files auto-fill labels when possible. PKL files are kept as uploaded artifacts."}
+                    ?? "JSON files auto-fill labels when possible. PKL and JOBLIB files are kept as uploaded artifacts."}
                 </small>
                 <div className="artifact-slot__list artifact-slot__list--preview">
                   {(state.artifactFiles.label_map_file ?? []).length > 0 ? (
@@ -2160,7 +2163,10 @@ export function ModelUploadWizard({
           </div>
         </label>
 
-        <label htmlFor={fieldId("enable-on-upload")} className="toggle-field field-shell">
+        <label
+          htmlFor={fieldId("enable-on-upload")}
+          className={`toggle-field field-shell${fieldErrorFor(state, "enable_on_upload") ? " field-shell--error" : ""}`}
+        >
           <div className="toggle-field__copy">
             {renderInfoLabel(
               "Enable after registration",
@@ -2184,9 +2190,15 @@ export function ModelUploadWizard({
             <span className="toggle-field__switch" aria-hidden="true" />
             <span className="toggle-field__state">{state.metadata.enable_on_upload ? "On" : "Off"}</span>
           </div>
+          {fieldErrorFor(state, "enable_on_upload") ? (
+            <small>{fieldErrorFor(state, "enable_on_upload")}</small>
+          ) : null}
         </label>
 
-        <label htmlFor={fieldId("runtime-preprocessing")} className="field-shell field-shell--wide">
+        <label
+          htmlFor={fieldId("runtime-preprocessing")}
+          className={`field-shell field-shell--wide${fieldErrorFor(state, "runtime_preprocessing") ? " field-shell--error" : ""}`}
+        >
           {renderInfoLabel("Preprocessing", "Especially useful for custom PyTorch and classic ML registrations.")}
           <input
             id={fieldId("runtime-preprocessing")}
@@ -2200,6 +2212,9 @@ export function ModelUploadWizard({
             }
             placeholder="normalize_text + texts_to_sequences"
           />
+          {fieldErrorFor(state, "runtime_preprocessing") ? (
+            <small>{fieldErrorFor(state, "runtime_preprocessing")}</small>
+          ) : null}
         </label>
 
         <label
