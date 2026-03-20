@@ -1095,7 +1095,7 @@ export function ModelUploadWizard({
   const [reviewConfigOpen, setReviewConfigOpen] = useState(false);
   const fieldId = (suffix: string) => `${fieldIdPrefix}-${suffix}`;
   const localUploadTooltip =
-    `Local upload max: ${LOCAL_UPLOAD_LIMIT_MB} MB total. For transformers, upload only weights, tokenizer files, and config.json.`;
+    `Max local upload: ${LOCAL_UPLOAD_LIMIT_MB} MB. For transformers, send weights, tokenizer files, and config.json only.`;
   const renderInfoLabel = (label: string, tooltip: string) => (
     <span className="field-shell__label-row">
       <span>{label}</span>
@@ -2903,7 +2903,7 @@ export function ModelUploadWizard({
                   <h3>{STEP_DEFS.find((step) => step.id === state.step)?.label}</h3>
                   {state.step === "validate" ? (
                     <span
-                      className="field-info-badge field-info-badge--wide"
+                      className="field-info-badge field-info-badge--upload-limit"
                       tabIndex={0}
                       role="note"
                       aria-label={localUploadTooltip}

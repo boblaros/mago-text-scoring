@@ -4310,6 +4310,10 @@ textarea {
   gap: 16px;
 }
 
+.model-upload-sheet__header > div {
+  min-width: 0;
+}
+
 .model-upload-sheet__content {
   box-sizing: border-box;
   min-height: 0;
@@ -4474,6 +4478,11 @@ textarea {
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+.field-info-badge--upload-limit::after {
+  width: clamp(252px, 28vw, 320px);
+  text-wrap: balance;
 }
 
 .model-upload-sheet__choice-grid {

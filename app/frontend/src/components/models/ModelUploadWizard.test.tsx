@@ -416,7 +416,7 @@ describe("ModelUploadWizard", () => {
     const infoBadge = screen.getByTestId("model-artifacts-info-badge");
     expect(infoBadge).toHaveAttribute(
       "aria-label",
-      "Local upload max: 512 MB total. For transformers, upload only weights, tokenizer files, and config.json.",
+      "Max local upload: 512 MB. For transformers, send weights, tokenizer files, and config.json only.",
     );
   });
 
